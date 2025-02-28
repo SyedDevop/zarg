@@ -222,6 +222,11 @@ const cmdList: []const Cmd = &.{
     },
 };
 
+const CLiVesion = union(enum) {
+    str: []const u8,
+    fun: *const fn (cli: *const Cli) void,
+};
+
 pub const Cli = struct {
     const Self = @This();
     alloc: Allocator,
@@ -236,11 +241,11 @@ pub const Cli = struct {
     cmd: Cmd,
     data: []const u8 = "",
 
-    version: []const u8,
+    version: CLiVesion,
 
     errorMess: []u8,
 
-    pub fn init(allocate: Allocator, name: []const u8, description: ?[]const u8, version: []const u8) !Self {
+    pub fn init(allocate: Allocator, name: []const u8, description: ?[]const u8, version: CLiVesion) !Self {
         return .{
             .alloc = allocate,
             .name = name,
