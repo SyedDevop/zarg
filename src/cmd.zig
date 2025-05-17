@@ -60,6 +60,11 @@ pub fn Cmd(comptime CmdEnum: type) type {
 
 const cmdList: []const Cmd = &.{};
 pub fn Cli(comptime CmdEnum: type) type {
+    comptime {
+        if (@typeInfo(CmdEnum) != .Enum) {
+            @compileError("CmdEnum must be an enum type; Found  " ++ @typeName(CmdEnum));
+        }
+    }
     const CmdT = Cmd(CmdEnum);
     return struct {
         pub const Self = @This();
@@ -85,8 +90,31 @@ pub fn Cli(comptime CmdEnum: type) type {
             description: ?[]const u8,
             version: []const u8,
             root: CmdT,
-            sub_commands: []const CmdT,
+            comptime sub_commands: []const CmdT,
         ) !Self {
+            comptime {
+                const enum_fields = @typeInfo(CmdEnum).Enum.fields;
+                for (enum_fields) |field| {
+                    var found = false;
+                    for (sub_commands) |sb_cmd| {
+                        if (@intFromEnum(sb_cmd.name) == field.value) {
+                            if (found) {
+                                @compileError("Duplicate sub command found with name: " ++ field.name);
+                            }
+                            found = true;
+                        }
+                    }
+
+                    //TODO : Should root and sub commands be in same list
+                    // If not this will cause a compile error.
+                    // For just printing the a warning.
+
+                    if (!found) {
+                        //@compileError("Sub Command not found: " ++ field.name);
+                        //@compileLog("Sub Command not found: " ++ field.name);
+                    }
+                }
+            }
             return .{
                 .alloc = allocate,
                 .name = program_name,
