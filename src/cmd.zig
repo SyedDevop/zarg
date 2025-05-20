@@ -34,6 +34,7 @@ pub const Arg = struct {
     short: []const u8,
     info: []const u8,
     value: ArgValue,
+    //TODO : Do i need this,
     is_alloc: bool = false,
 };
 pub const ArgError = error{};
@@ -47,6 +48,15 @@ pub fn isVersionOption(opt: []const u8) bool {
     return (std.mem.eql(u8, "-v", opt) or std.mem.eql(u8, "--version", opt));
 }
 
+fn shift(comptime T: type, xs: *[]T) !T {
+    if (xs.len == 0) {
+        return error.EmptySlice;
+    }
+    const first = xs.*[0];
+    xs.ptr += 1;
+    xs.len -= 1;
+    return first;
+}
 pub fn Cmd(comptime CmdEnum: type) type {
     return struct {
         name: CmdEnum,
@@ -58,7 +68,6 @@ pub fn Cmd(comptime CmdEnum: type) type {
     };
 }
 
-const cmdList: []const Cmd = &.{};
 pub fn Cli(comptime CmdEnum: type) type {
     comptime {
         if (@typeInfo(CmdEnum) != .Enum) {
@@ -68,35 +77,39 @@ pub fn Cli(comptime CmdEnum: type) type {
     const CmdT = Cmd(CmdEnum);
     return struct {
         pub const Self = @This();
+
         alloc: Allocator,
+
+        computed_args: ArgsList,
+        cmds: []const CmdT,
+        running_cmd: CmdT,
 
         name: []const u8,
         description: ?[]const u8 = null,
-        process_name: []const u8 = "",
+        executable_name: []const u8 = undefined,
 
-        computed_args: ArgsList,
-        subCmds: []const CmdT,
-        rootCmd: CmdT,
-        cmd: CmdT,
+        /// Data after the commands and flags.
         data: []const u8 = "",
+
+        /// Rest of the data after --.
+        rest: ?[]const []const u8 = null,
 
         version: []const u8,
 
-        errorMess: []u8,
-
+        /// The First command is always the root command
         pub fn init(
             allocate: Allocator,
-            program_name: []const u8,
+            name: []const u8,
             description: ?[]const u8,
             version: []const u8,
-            root: CmdT,
-            comptime sub_commands: []const CmdT,
+            comptime commands: []const CmdT,
         ) !Self {
             comptime {
+                if (commands.len <= 0) @compileError("You need to provided At list one command.");
                 const enum_fields = @typeInfo(CmdEnum).Enum.fields;
                 for (enum_fields) |field| {
                     var found = false;
-                    for (sub_commands) |sb_cmd| {
+                    for (commands) |sb_cmd| {
                         if (@intFromEnum(sb_cmd.name) == field.value) {
                             if (found) {
                                 @compileError("Duplicate sub command found with name: " ++ field.name);
@@ -117,76 +130,68 @@ pub fn Cli(comptime CmdEnum: type) type {
             }
             return .{
                 .alloc = allocate,
-                .name = program_name,
+                .name = name,
                 .description = description,
-                .subCmds = sub_commands,
-                .rootCmd = root,
-                .cmd = root,
+                .cmds = commands,
+                .running_cmd = commands[0],
                 .version = version,
                 .computed_args = ArgsList.init(allocate),
-                .errorMess = try allocate.alloc(u8, 255),
             };
         }
         pub fn parse(self: *Self) !void {
             const args = try std.process.argsAlloc(self.alloc);
             defer std.process.argsFree(self.alloc, args);
+            std.debug.print("All the cmds |{s}|\n", .{args});
+            try self.parseAllArgs(args);
+        }
+        pub fn parseAllArgs(self: *Self, args: []const []const u8) !void {
+            var idx: usize = 0;
+            self.executable_name = args[idx];
+            idx += 1;
+            const cmd = self.getCmd(std.meta.stringToEnum(CmdEnum, if (args.len > idx) args[idx] else ""));
+            self.running_cmd = cmd;
+            idx += 1;
 
-            var idx: usize = 1;
-            const cmdEnum = if (args.len == 1) self.rootCmd.name else std.meta.stringToEnum(CmdEnum, args[idx]);
-            const cmd = self.getCmd(cmdEnum);
+            if (args.len < idx + self.running_cmd.min_arg) return error.InsufficientArguments;
 
-            self.cmd = cmd;
-            self.process_name = try self.alloc.dupe(u8, args[0]);
-            if (cmd.name != .root) {
-                idx += 1;
-            }
-            if (args.len < idx + cmd.min_arg) {
-                std.debug.print("\x1b[1;31m[Error]: Insufficient arguments provided.\x1b[0m\n\n", .{});
-                try self.help();
-                std.process.exit(0);
-            }
-
-            if (self.cmd.options) |opt| {
+            if (self.running_cmd.options) |opt| {
                 for (opt) |arg| {
-                    if (idx < args.len and (std.mem.eql(u8, arg.long, args[idx]) or std.mem.eql(u8, arg.short, args[idx]))) {
-                        var copy_arg = arg;
-                        switch (arg.value) {
-                            .bool => {
-                                copy_arg.value = .{ .bool = true };
-                                try self.computed_args.append(copy_arg);
-                            },
-                            .str => {
-                                if (idx + 1 >= args.len) {
-                                    std.debug.print("Error: value reqaired after '{s}'", .{args[idx]});
-                                    std.process.exit(1);
-                                }
-                                idx += 1;
-                                copy_arg.is_alloc = true;
-                                copy_arg.value = .{ .str = try self.alloc.dupe(u8, args[idx]) };
-                                try self.computed_args.append(copy_arg);
-                            },
-                            .num => {
-                                if (idx + 1 >= args.len) {
-                                    std.debug.print("Error: value reqaired after '{s}'", .{args[idx]});
-                                    std.process.exit(1);
-                                }
-                                idx += 1;
-                                const num = std.fmt.parseInt(i32, args[idx], 10) catch |e| switch (e) {
-                                    error.InvalidCharacter => null,
-                                    else => return e,
-                                };
-                                copy_arg.value = .{ .num = num };
-                                try self.computed_args.append(copy_arg);
-                            },
-                        }
-                        idx += 1;
-                    } else {
-                        // NOTE: If an argument has a default value and is not provided,
-                        // add it to computed_args.
-                        switch (arg.value) {
-                            .bool => |b| if (b != null) try self.computed_args.append(arg),
-                            .str => |s| if (s != null) try self.computed_args.append(arg),
-                            .num => |n| if (n != null) try self.computed_args.append(arg),
+                    if (idx < args.len) {
+                        const kv_arg = try parseKVArg(args[idx..]);
+                        if (std.mem.eql(u8, arg.long, kv_arg.key) or std.mem.eql(u8, arg.short, kv_arg.key)) {
+                            var copy_arg = arg;
+                            switch (arg.value) {
+                                .bool => {
+                                    copy_arg.value = .{ .bool = true };
+                                    try self.computed_args.append(copy_arg);
+                                },
+                                .str => {
+                                    if (kv_arg.value == null) return error.ValueRequired;
+                                    idx += kv_arg.count;
+                                    copy_arg.is_alloc = true;
+                                    copy_arg.value = .{ .str = try self.alloc.dupe(u8, kv_arg.value.?) };
+                                    try self.computed_args.append(copy_arg);
+                                },
+                                .num => {
+                                    if (kv_arg.value == null) return error.ValueRequired;
+                                    idx += kv_arg.count;
+                                    const num = std.fmt.parseInt(i32, kv_arg.value.?, 10) catch |e| switch (e) {
+                                        error.InvalidCharacter => null,
+                                        else => return e,
+                                    };
+                                    copy_arg.value = .{ .num = num };
+                                    try self.computed_args.append(copy_arg);
+                                },
+                            }
+                            idx += 1;
+                        } else {
+                            // NOTE: If an argument has a default value and is not provided,
+                            // add it to computed_args.
+                            switch (arg.value) {
+                                .bool => |b| if (b != null) try self.computed_args.append(arg),
+                                .str => |s| if (s != null) try self.computed_args.append(arg),
+                                .num => |n| if (n != null) try self.computed_args.append(arg),
+                            }
                         }
                     }
                 }
@@ -211,11 +216,11 @@ pub fn Cli(comptime CmdEnum: type) type {
         }
 
         fn getCmd(self: Self, cmd: ?CmdEnum) CmdT {
-            if (cmd == null) return self.rootCmd;
-            for (self.subCmds) |value| {
+            if (cmd == null) return self.cmds[0];
+            for (self.cmds) |value| {
                 if (value.name == cmd) return value;
             }
-            return self.rootCmd;
+            return self.cmds[0];
         }
 
         pub fn getStrArg(self: Self, arg_name: []const u8) !?[]const u8 {
@@ -263,7 +268,7 @@ pub fn Cli(comptime CmdEnum: type) type {
             if (self.description) |dis| {
                 try stdout.print("Z Math {s}\n{s}\n\n", .{ self.version, dis });
             }
-            const cmd_opt = self.cmd;
+            const cmd_opt = self.running_cmd;
             try stdout.print("USAGE: \n", .{});
             try stdout.print("  {s}\n\n", .{cmd_opt.usage});
             if (cmd_opt.info) |info| {
@@ -295,7 +300,7 @@ pub fn Cli(comptime CmdEnum: type) type {
             try stdout.print("\n", .{});
             if (cmd_opt.name != .root) return;
             try stdout.print("COMMANDS: \n", .{});
-            for (self.subCmds) |value| {
+            for (self.cmds) |value| {
                 if (value.info) |info| {
                     const name = @tagName(value.name);
                     try stdout.print(" {s}", .{name});
@@ -310,8 +315,7 @@ pub fn Cli(comptime CmdEnum: type) type {
             for (self.computed_args.items) |*item| if (item.is_alloc) try item.value.free(self.alloc);
             self.computed_args.deinit();
             self.alloc.free(self.data);
-            self.alloc.free(self.errorMess);
-            self.alloc.free(self.process_name);
+            // self.alloc.free(self.process_name);
         }
     };
 }
@@ -326,6 +330,10 @@ pub const KeyValueArg = struct {
     key: []const u8,
     value: ?[]const u8 = null,
     count: u2,
+
+    fn print(self: *const KeyValueArg) !void {
+        std.debug.print("KeyValueArg: key:{s} Val:{?s} Con:{d}\n", .{ self.key, self.value, self.count });
+    }
 };
 
 /// Splits a single argument of form "key=value" into KeyValueArg,
@@ -434,6 +442,8 @@ test "parseKeyValueArgs additional edge cases" {
         .{ .input = &.{ "#!$", "=", "@!%" }, .expected_key = "#!$", .expected_value = "@!%", .expected_count = 2 },
         .{ .input = &.{ "--", "=" }, .expected_key = "--", .expected_value = null, .expected_count = 0 },
         .{ .input = &.{ "--=", "value" }, .expected_key = "--", .expected_value = "value", .expected_count = 1 },
+        .{ .input = &.{ "asdad", "--value" }, .expected_key = "--value", .expected_value = null, .expected_count = 1 },
+        // .{ .input = &.{ "asdad", "--value", "=" }, .expected_key = "--value", .expected_value = null, .expected_count = 1 },
         // .{ .input = &.{ "--12=23", "=", "11" }, .expected_key = "--12", .expected_value = "23" },
     };
 

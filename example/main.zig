@@ -10,23 +10,9 @@ const USAGE =
 ;
 const CmdType = zarg.Cmd(UserCmd);
 
-const rootCmd: CmdType = .{
-    .name = .root,
-    .usage = "m [OPTIONS] \"EXPRESSION\"",
-    .options = &.{
-        .{
-            .long = "--print",
-            .short = "-p",
-            .info = "Prints the result of the expression.",
-            .value = .{ .str = null },
-        },
-    },
-    .min_arg = 0,
-};
-
 const xmd = [_]CmdType{
     .{
-        .name = .add,
+        .name = .root,
         .usage = "m [OPTIONS] \"EXPRESSION\"",
         .options = &.{
             .{
@@ -40,6 +26,25 @@ const xmd = [_]CmdType{
     },
     .{
         .name = .add,
+        .usage = "m [OPTIONS] \"EXPRESSION\"",
+        .options = &.{
+            .{
+                .long = "--a",
+                .short = "-a",
+                .info = "",
+                .value = .{ .num = null },
+            },
+            .{
+                .long = "--b",
+                .short = "-b",
+                .info = "",
+                .value = .{ .num = null },
+            },
+        },
+        .min_arg = 0,
+    },
+    .{
+        .name = .list,
         .usage = "m [OPTIONS] \"EXPRESSION\"",
         .options = &.{
             .{
@@ -65,20 +70,21 @@ pub fn main() !void {
     defer _ = gpa.deinit();
 
     var cli = try zarg.Cli(UserCmd)
-        .init(allocator, "", "", "", rootCmd, &xmd);
+        .init(allocator, "", "", "", &xmd);
 
     defer cli.deinit();
 
     try cli.parse();
     const input = cli.data;
-    std.debug.print("The Input is {s}", .{input});
+    std.debug.print("The Input is {s}\n", .{input});
 
-    std.debug.print("The Command is Root {?s}", .{@tagName(cli.cmd.name)});
-    // switch (cli.cmd.name) {
-    //     .root => {
-    //         const p = try cli.getStrArg("-p");
-    //         std.debug.print("The Command is Root {?s}", .{p});
-    //     },
-    //     else => {},
-    // }
+    std.debug.print("The Command is |{?s}|", .{@tagName(cli.running_cmd.name)});
+    switch (cli.running_cmd.name) {
+        .add => {
+            const a = if (try cli.getNumArg("-a")) |a| a else 0;
+            const b = if (try cli.getNumArg("-b")) |b| b else 0;
+            std.debug.print("The Command is add(a:{d},b:{d})  {d}", .{ a, b, a + b });
+        },
+        else => {},
+    }
 }
