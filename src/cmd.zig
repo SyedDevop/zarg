@@ -315,21 +315,30 @@ pub fn Cli(comptime CmdEnum: type) type {
         }
     };
 }
-
-const KeyValueArg = struct {
+/// Represents a parsed key-value argument
+///
+/// Fields:
+/// - `key`: The key portion of the argument, e.g., `"--opt"`
+/// - `value`: The optional value portion, or `null` if not present
+/// - `count`: Number of additional arguments consumed beyond the key itself
+///            during parsing (e.g., to extract a separate `=`, value, or both)
+pub const KeyValueArg = struct {
     key: []const u8,
     value: ?[]const u8 = null,
+    count: u2,
 };
 
 /// Splits a single argument of form "key=value" into KeyValueArg,
 /// or returns just the key if no '=' is found.
-fn splitKeyValue(arg: []const u8) KeyValueArg {
+pub fn splitKeyValue(arg: []const u8) KeyValueArg {
     return if (std.mem.indexOf(u8, arg, "=")) |idx| .{
         .key = arg[0..idx],
         .value = if (idx + 1 < arg.len) arg[idx + 1 ..] else null,
+        .count = 0,
     } else .{
         .key = arg,
         .value = null,
+        .count = 0,
     };
 }
 /// Parses command-line style key/value arguments.
@@ -339,55 +348,56 @@ fn splitKeyValue(arg: []const u8) KeyValueArg {
 ///   --opt = value
 ///   --opt =value
 ///   --opt= value
-fn parseKVArg(cmds: []const []const u8) !KeyValueArg {
+pub fn parseKVArg(cmds: []const []const u8) !KeyValueArg {
     if (cmds.len == 0) return error.EmptyArg;
     const startsWith = std.mem.startsWith;
     const eql = std.mem.eql;
 
-    // Initialize from the first part
     var result = splitKeyValue(cmds[0]);
-    switch (cmds.len) {
-        1 => return result,
-        2 => {
-            const second = cmds[1];
-            if (eql(u8, second, "=")) return result;
-            result.value = if (startsWith(u8, second, "=")) second[1..] else second;
-            return result;
-        },
-        else => {
-            const second = cmds[1];
-            if (!std.mem.eql(u8, second, "=")) return error.InvalidArgStyle;
-            result.value = cmds[2];
-            return result;
-        },
+    if (cmds.len == 1 or result.value != null) return result;
+
+    for (cmds[1..@min(cmds.len, 3)], 1..) |section, i| {
+        if (eql(u8, section, "=")) continue;
+        result.value = if (startsWith(u8, section, "=")) section[1..] else section;
+        result.count = @truncate(i);
+        break;
     }
-    unreachable;
+    return result;
 }
 
 const TestCase = struct {
     input: []const []const u8,
     expected_key: []const u8,
     expected_value: ?[]const u8,
+    expected_count: u3,
 };
 test "parseKeyValueArgs valid inputs" {
     const strEql = std.testing.expectEqualStrings;
     const deepEql = std.testing.expectEqualDeep;
 
     const cases = [_]TestCase{
-        .{ .input = &.{ "--option", "=", "value" }, .expected_key = "--option", .expected_value = "value" },
-        .{ .input = &.{"--option=value"}, .expected_key = "--option", .expected_value = "value" },
-        .{ .input = &.{ "--option", "value" }, .expected_key = "--option", .expected_value = "value" },
-        .{ .input = &.{ "--option", "=value" }, .expected_key = "--option", .expected_value = "value" },
-        .{ .input = &.{ "--option=", "value" }, .expected_key = "--option", .expected_value = "value" },
-        .{ .input = &.{"--option"}, .expected_key = "--option", .expected_value = null },
-        .{ .input = &.{"--option="}, .expected_key = "--option", .expected_value = null },
-        .{ .input = &.{ "--option", "=" }, .expected_key = "--option", .expected_value = null },
+        .{ .input = &.{ "--option", "value1", "value2" }, .expected_key = "--option", .expected_value = "value1", .expected_count = 1 },
+        .{ .input = &.{ "--option", "=value1", "value2" }, .expected_key = "--option", .expected_value = "value1", .expected_count = 1 },
+        .{ .input = &.{ "--option", "=", "value" }, .expected_key = "--option", .expected_value = "value", .expected_count = 2 },
+        .{ .input = &.{"--option=value"}, .expected_key = "--option", .expected_value = "value", .expected_count = 0 },
+        .{ .input = &.{ "--option", "value" }, .expected_key = "--option", .expected_value = "value", .expected_count = 1 },
+        .{ .input = &.{ "--option", "=value" }, .expected_key = "--option", .expected_value = "value", .expected_count = 1 },
+        .{ .input = &.{ "--option=", "value" }, .expected_key = "--option", .expected_value = "value", .expected_count = 1 },
+        .{ .input = &.{"--option"}, .expected_key = "--option", .expected_value = null, .expected_count = 0 },
+        .{ .input = &.{"--option="}, .expected_key = "--option", .expected_value = null, .expected_count = 0 },
+        .{ .input = &.{ "--option", "=" }, .expected_key = "--option", .expected_value = null, .expected_count = 0 },
     };
 
-    for (cases) |test_case| {
+    for (cases, 0..) |test_case, i| {
         const result = try parseKVArg(test_case.input);
         try strEql(test_case.expected_key, result.key);
         try deepEql(test_case.expected_value, result.value);
+        std.testing.expectEqual(test_case.expected_count, result.count) catch |err| {
+            if (err == error.TestExpectedEqual) {
+                std.debug.print("The Failed test case is index |{d}|\n", .{i});
+                return error.TestExpectedEqual;
+            }
+        };
     }
 }
 
@@ -401,7 +411,6 @@ test "parseKeyValueArgs invalid inputs" {
 
     const cases = [_]TestCaseError{
         .{ .input = &.{}, .expected_error = error.EmptyArg },
-        .{ .input = &.{ "--option", "value1", "value2" }, .expected_error = error.InvalidArgStyle },
     };
 
     for (cases) |test_case| {
@@ -414,24 +423,30 @@ test "parseKeyValueArgs additional edge cases" {
     const deepEql = std.testing.expectEqualDeep;
 
     const cases = [_]TestCase{
-        .{ .input = &.{"="}, .expected_key = "", .expected_value = null },
-        .{ .input = &.{"=value"}, .expected_key = "", .expected_value = "value" },
-        .{ .input = &.{"key=="}, .expected_key = "key", .expected_value = "=" },
-        .{ .input = &.{"key=hello=r"}, .expected_key = "key", .expected_value = "hello=r" },
-        .{ .input = &.{"key==extra"}, .expected_key = "key", .expected_value = "=extra" },
-        .{ .input = &.{ " ", "=" }, .expected_key = " ", .expected_value = null },
-        .{ .input = &.{ " key ", "=", " value " }, .expected_key = " key ", .expected_value = " value " },
-        .{ .input = &.{"1=2"}, .expected_key = "1", .expected_value = "2" },
-        .{ .input = &.{ "#!$", "=", "@!%" }, .expected_key = "#!$", .expected_value = "@!%" },
-        .{ .input = &.{ "--", "=" }, .expected_key = "--", .expected_value = null },
-        .{ .input = &.{ "--=", "value" }, .expected_key = "--", .expected_value = "value" },
+        .{ .input = &.{"="}, .expected_key = "", .expected_value = null, .expected_count = 0 },
+        .{ .input = &.{"=value"}, .expected_key = "", .expected_value = "value", .expected_count = 0 },
+        .{ .input = &.{"key=="}, .expected_key = "key", .expected_value = "=", .expected_count = 0 },
+        .{ .input = &.{"key=hello=r"}, .expected_key = "key", .expected_value = "hello=r", .expected_count = 0 },
+        .{ .input = &.{"key==extra"}, .expected_key = "key", .expected_value = "=extra", .expected_count = 0 },
+        .{ .input = &.{ " ", "=" }, .expected_key = " ", .expected_value = null, .expected_count = 0 },
+        .{ .input = &.{ " key ", "=", " value " }, .expected_key = " key ", .expected_value = " value ", .expected_count = 2 },
+        .{ .input = &.{"1=2"}, .expected_key = "1", .expected_value = "2", .expected_count = 0 },
+        .{ .input = &.{ "#!$", "=", "@!%" }, .expected_key = "#!$", .expected_value = "@!%", .expected_count = 2 },
+        .{ .input = &.{ "--", "=" }, .expected_key = "--", .expected_value = null, .expected_count = 0 },
+        .{ .input = &.{ "--=", "value" }, .expected_key = "--", .expected_value = "value", .expected_count = 1 },
         // .{ .input = &.{ "--12=23", "=", "11" }, .expected_key = "--12", .expected_value = "23" },
     };
 
-    for (cases) |test_case| {
+    for (cases, 0..) |test_case, i| {
         const result = try parseKVArg(test_case.input);
         // std.debug.print("Key {s} Value{any}", .{ result.key, result.value });
         try strEql(test_case.expected_key, result.key);
         try deepEql(test_case.expected_value, result.value);
+        std.testing.expectEqual(test_case.expected_count, result.count) catch |err| {
+            if (err == error.TestExpectedEqual) {
+                std.debug.print("The Failed test case is index |{d}|\n", .{i});
+                return error.TestExpectedEqual;
+            }
+        };
     }
 }
