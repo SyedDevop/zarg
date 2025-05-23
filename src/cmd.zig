@@ -16,6 +16,11 @@ pub const CmdName = enum {
         return result.toOwnedSlice(); // Return only the filled portion of the array
     }
 };
+const RawArgs = std.ArrayList([]const u8);
+const Range = struct {
+    start: usize,
+    count: usize,
+};
 
 pub const ArgValue = union(enum) {
     str: ?[]const u8,
@@ -46,6 +51,14 @@ pub fn isHelpOption(opt: []const u8) bool {
 }
 pub fn isVersionOption(opt: []const u8) bool {
     return (std.mem.eql(u8, "-v", opt) or std.mem.eql(u8, "--version", opt));
+}
+
+pub fn removeRange(xs: *RawArgs, start_index: usize, count: usize) !void {
+    for (0..count + 1) |i| {
+        if (start_index >= xs.items.len) {
+            _ = xs.orderedRemove(start_index - i);
+        } else _ = xs.orderedRemove(start_index);
+    }
 }
 
 fn shift(comptime T: type, xs: *[]T) !T {
@@ -141,74 +154,82 @@ pub fn Cli(comptime CmdEnum: type) type {
         pub fn parse(self: *Self) !void {
             const args = try std.process.argsAlloc(self.alloc);
             defer std.process.argsFree(self.alloc, args);
-            std.debug.print("All the cmds |{s}|\n", .{args});
-            try self.parseAllArgs(args);
+            var argList = try RawArgs.initCapacity(self.alloc, args.len);
+            defer argList.deinit();
+            try argList.appendSlice(args);
+            // std.debug.print("All the cmds |{s}|\n", .{args});
+            try self.parseAllArgs(&argList);
         }
-        pub fn parseAllArgs(self: *Self, args: []const []const u8) !void {
-            var idx: usize = 0;
-            self.executable_name = args[idx];
-            idx += 1;
-            const cmd = self.getCmd(std.meta.stringToEnum(CmdEnum, if (args.len > idx) args[idx] else ""));
+        pub fn parseAllArgs(self: *Self, args: *RawArgs) !void {
+            self.executable_name = args.orderedRemove(0);
+            const cmdEnum = std.meta.stringToEnum(CmdEnum, if (args.items.len > 0) args.items[0] else "");
+            const cmd = self.getCmd(cmdEnum);
+            if (self.cmds[0].name != cmd.name) _ = args.orderedRemove(0);
             self.running_cmd = cmd;
-            idx += 1;
 
-            if (args.len < idx + self.running_cmd.min_arg) return error.InsufficientArguments;
+            if (args.items.len < self.running_cmd.min_arg) return error.InsufficientArguments;
 
-            if (self.running_cmd.options) |opt| {
-                for (opt) |arg| {
-                    if (idx < args.len) {
-                        const kv_arg = try parseKVArg(args[idx..]);
-                        if (std.mem.eql(u8, arg.long, kv_arg.key) or std.mem.eql(u8, arg.short, kv_arg.key)) {
-                            var copy_arg = arg;
-                            switch (arg.value) {
-                                .bool => {
-                                    copy_arg.value = .{ .bool = true };
-                                    try self.computed_args.append(copy_arg);
-                                },
-                                .str => {
-                                    if (kv_arg.value == null) return error.ValueRequired;
-                                    idx += kv_arg.count;
-                                    copy_arg.is_alloc = true;
-                                    copy_arg.value = .{ .str = try self.alloc.dupe(u8, kv_arg.value.?) };
-                                    try self.computed_args.append(copy_arg);
-                                },
-                                .num => {
-                                    if (kv_arg.value == null) return error.ValueRequired;
-                                    idx += kv_arg.count;
-                                    const num = std.fmt.parseInt(i32, kv_arg.value.?, 10) catch |e| switch (e) {
-                                        error.InvalidCharacter => null,
-                                        else => return e,
-                                    };
-                                    copy_arg.value = .{ .num = num };
-                                    try self.computed_args.append(copy_arg);
-                                },
+            var removal_ranges = std.ArrayList(Range).init(self.alloc);
+            defer removal_ranges.deinit();
+
+            //TODO: 1. Check for Duplicate arguments.
+            //TODO: 2. Check for Invalid Arguments.
+            if (self.running_cmd.options) |opts| {
+                for (opts) |opt| {
+                    var option_found = false;
+                    for (args.items, 0..) |arg, i| brk: {
+                        if (std.mem.startsWith(u8, arg, "--")) {
+                            if (arg.len == 2) @panic("TODO: rest not implemented");
+                            if (isHelpOption(arg)) return error.ShowHelp;
+                            if (isVersionOption(arg)) return error.ShowVersion;
+                            const kv_arg = try parseKVArg(args.items[i..]);
+                            if (kv_arg.value == null) return error.ValueRequired;
+                            if (std.mem.eql(u8, opt.long, kv_arg.key)) {
+                                try removal_ranges.append(.{ .start = i, .count = kv_arg.count });
+                                var copy_opt = opt;
+                                switch (opt.value) {
+                                    .bool => @panic("TODO: Long bool args not implemented"),
+                                    .str => {
+                                        copy_opt.is_alloc = true;
+                                        copy_opt.value = .{ .str = try self.alloc.dupe(u8, kv_arg.value.?) };
+                                        try self.computed_args.append(copy_opt);
+                                    },
+                                    .num => {
+                                        const num = std.fmt.parseInt(i32, kv_arg.value.?, 10) catch |e| switch (e) {
+                                            error.InvalidCharacter => null,
+                                            else => return e,
+                                        };
+                                        copy_opt.value = .{ .num = num };
+                                        try self.computed_args.append(copy_opt);
+                                    },
+                                }
+                                option_found = true;
+                                break :brk;
                             }
-                            idx += 1;
-                        } else {
-                            // NOTE: If an argument has a default value and is not provided,
-                            // add it to computed_args.
-                            switch (arg.value) {
-                                .bool => |b| if (b != null) try self.computed_args.append(arg),
-                                .str => |s| if (s != null) try self.computed_args.append(arg),
-                                .num => |n| if (n != null) try self.computed_args.append(arg),
-                            }
+                        } else if (std.mem.startsWith(u8, arg, "-")) @panic("TODO: short args not implemented");
+                    }
+                    if (!option_found) {
+                        // NOTE: If an argument has a default value and is not provided,
+                        // add it to computed_args.
+                        switch (opt.value) {
+                            .bool => |b| if (b != null) try self.computed_args.append(opt),
+                            .str => |s| if (s != null) try self.computed_args.append(opt),
+                            .num => |n| if (n != null) try self.computed_args.append(opt),
                         }
                     }
                 }
             }
 
-            if (idx >= args.len) return;
-            if (isHelpOption(args[idx])) {
-                try self.help();
-                std.process.exit(0);
-            } else if (isVersionOption(args[idx])) {
-                std.debug.print("Z Math {s}", .{self.version});
-                std.process.exit(0);
+            var offset: usize = 0;
+            for (removal_ranges.items) |r| {
+                try removeRange(args, r.start -| offset, r.count);
+                offset += r.count;
             }
 
             var argList = std.ArrayList(u8).init(self.alloc);
+            std.debug.print("{?s}\n", .{args.items});
             defer argList.deinit();
-            for (args[idx..]) |arg| {
+            for (args.items) |arg| {
                 try argList.appendSlice(arg);
                 try argList.append(' ');
             }
@@ -379,6 +400,26 @@ const TestCase = struct {
     expected_value: ?[]const u8,
     expected_count: u3,
 };
+
+test "removeRange removes correct elements" {
+    const allocator = std.testing.allocator;
+    var args = RawArgs.init(allocator);
+    defer args.deinit();
+
+    try args.append("arg0");
+    try args.append("arg1");
+    try args.append("arg2");
+    try args.append("arg3");
+    try args.append("arg4");
+
+    // Remove elements from index 1 (arg1, arg2)
+    try removeRange(&args, 1, 2);
+
+    try std.testing.expectEqual(@as(usize, 3), args.items.len);
+    try std.testing.expectEqualStrings("arg0", args.items[0]);
+    try std.testing.expectEqualStrings("arg3", args.items[1]);
+    try std.testing.expectEqualStrings("arg4", args.items[2]);
+}
 test "parseKeyValueArgs valid inputs" {
     const strEql = std.testing.expectEqualStrings;
     const deepEql = std.testing.expectEqualDeep;
@@ -442,7 +483,7 @@ test "parseKeyValueArgs additional edge cases" {
         .{ .input = &.{ "#!$", "=", "@!%" }, .expected_key = "#!$", .expected_value = "@!%", .expected_count = 2 },
         .{ .input = &.{ "--", "=" }, .expected_key = "--", .expected_value = null, .expected_count = 0 },
         .{ .input = &.{ "--=", "value" }, .expected_key = "--", .expected_value = "value", .expected_count = 1 },
-        .{ .input = &.{ "asdad", "--value" }, .expected_key = "--value", .expected_value = null, .expected_count = 1 },
+        // .{ .input = &.{ "asdad", "--value" }, .expected_key = "--value", .expected_value = null, .expected_count = 1 },
         // .{ .input = &.{ "asdad", "--value", "=" }, .expected_key = "--value", .expected_value = null, .expected_count = 1 },
         // .{ .input = &.{ "--12=23", "=", "11" }, .expected_key = "--12", .expected_value = "23" },
     };

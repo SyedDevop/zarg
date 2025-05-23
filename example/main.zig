@@ -40,6 +40,12 @@ const xmd = [_]CmdType{
                 .info = "",
                 .value = .{ .num = null },
             },
+            .{
+                .long = "--c",
+                .short = "-c",
+                .info = "",
+                .value = .{ .num = 10 },
+            },
         },
         .min_arg = 0,
     },
@@ -78,12 +84,16 @@ pub fn main() !void {
     const input = cli.data;
     std.debug.print("The Input is {s}\n", .{input});
 
-    std.debug.print("The Command is |{?s}|", .{@tagName(cli.running_cmd.name)});
+    std.debug.print("The Command is |{?s}|\n", .{@tagName(cli.running_cmd.name)});
     switch (cli.running_cmd.name) {
         .add => {
             const a = if (try cli.getNumArg("-a")) |a| a else 0;
             const b = if (try cli.getNumArg("-b")) |b| b else 0;
-            std.debug.print("The Command is add(a:{d},b:{d})  {d}", .{ a, b, a + b });
+            const c = if (try cli.getNumArg("-c")) |c| c else 0;
+            for (cli.computed_args.items) |v| {
+                std.debug.print("Computed args V:{?} L:{s} S:{s} \n", .{ v.value, v.long, v.short });
+            }
+            std.debug.print("The Command is add(a:{d}, b:{d}, c:{d})  {d}\n", .{ a, b, c, a + b + c });
         },
         else => {},
     }
