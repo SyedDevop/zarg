@@ -81,8 +81,7 @@ pub fn main() !void {
     defer cli.deinit();
 
     try cli.parse();
-    const input = cli.data;
-    std.debug.print("The Input is {s}\n", .{input});
+    std.debug.print("The Input is {?s}\n", .{cli.pos_args});
 
     std.debug.print("The Command is |{?s}|\n", .{@tagName(cli.running_cmd.name)});
     switch (cli.running_cmd.name) {

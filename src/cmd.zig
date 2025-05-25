@@ -17,10 +17,6 @@ pub const CmdName = enum {
     }
 };
 const RawArgs = std.ArrayList([]const u8);
-const Range = struct {
-    start: usize,
-    count: usize,
-};
 
 pub const ArgValue = union(enum) {
     str: ?[]const u8,
@@ -53,11 +49,67 @@ pub fn isVersionOption(opt: []const u8) bool {
     return (std.mem.eql(u8, "-v", opt) or std.mem.eql(u8, "--version", opt));
 }
 
+/// Safely removes up to `count` elements from `xs`, starting at `start_index`.
+///
+/// If the specified range would exceed the bounds of the array, it removes only the
+/// available number of elements from `start_index` to the end.
+///
+/// - If `start_index` is out of bounds (greater than or equal to `xs.items.len`), no elements are removed.
+/// - If `count` is too large to fit within the array, it is clamped to the maximum valid range.
+///
+/// This is a safe variant of `removeRange` that avoids out-of-bounds access.
+///
+/// Example:
+/// ```zig
+/// // Given an array [a, b, c, d], calling removeRangeSafe(&xs, 2, 5)
+/// // will remove [c, d], not error out.
+/// ```
+pub fn removeRangeSafe(xs: *RawArgs, start_index: usize, count: usize) !void {
+    if (start_index >= xs.items.len) return; // nothing to remove
+    const available = xs.items.len - start_index;
+    try removeRange(xs, start_index, @min(count, available));
+}
+
+/// Removes a range of elements from `xs`, starting at `start_index` and removing `count` elements.
+///
+/// This version removes exactly `count` elements.
+///
+/// Example: removeRange(&xs, 2, 3) will remove elements at indices 2, 3, and 4 (three elements total).
 pub fn removeRange(xs: *RawArgs, start_index: usize, count: usize) !void {
-    for (0..count + 1) |i| {
-        if (start_index >= xs.items.len) {
-            _ = xs.orderedRemove(start_index - i);
-        } else _ = xs.orderedRemove(start_index);
+    for (0..count) |_| {
+        _ = xs.orderedRemove(start_index);
+    }
+}
+
+/// Safely removes `count + 1` elements from `xs`, starting at `start_index`.
+///
+/// This is a safe variant of `removeRangeInclusive` that avoids out-of-bounds access.
+///
+/// from `start_index` up to and including `start_index + count`. If the requested
+/// range exceeds the bounds of the array, it clamps the removal to the valid portion.
+///
+/// - Does nothing if `start_index` is out of bounds.
+/// - Guarantees no out-of-bounds access.
+///
+/// Example:
+/// ```zig
+/// // Given [a, b, c, d], removeRangeInclusiveSafe(&xs, 2, 2)
+/// // attempts to remove [c, d] (indices 2, 3, 4), but only [c, d] are removed.
+/// ```
+pub fn removeRangeInclusiveSafe(xs: *RawArgs, start_index: usize, count: usize) !void {
+    if (start_index >= xs.items.len) return; // nothing to remove
+    const available = xs.items.len - start_index;
+    try removeRangeInclusive(xs, start_index, @min(count, available));
+}
+
+/// Removes a range of elements from `xs`, starting at `start_index` and removing `count + 1` elements.
+///
+/// This version includes the end index in the removal. That is, it removes from `start_index` to `start_index + count`, inclusive.
+///
+/// Example: removeRangeInclusive(&xs, 2, 3) will remove elements at indices 2, 3, 4, and 5 (four elements total).
+pub fn removeRangeInclusive(xs: *RawArgs, start_index: usize, count: usize) !void {
+    for (0..count + 1) |_| {
+        _ = xs.orderedRemove(start_index);
     }
 }
 
@@ -101,14 +153,15 @@ pub fn Cli(comptime CmdEnum: type) type {
         description: ?[]const u8 = null,
         executable_name: []const u8 = undefined,
 
-        /// Data after the commands and flags.
-        data: []const u8 = "",
+        /// pos_args (Positional arguments) interleaved with commands and flags.
+        pos_args: ?[][]const u8 = null,
 
-        /// Rest of the data after --.
-        rest: ?[]const []const u8 = null,
+        /// Rest of the arguments after '--'.
+        rest_args: ?[]const []const u8 = null,
 
         version: []const u8,
 
+        err_msg: [255]u8 = undefined,
         /// The First command is always the root command
         pub fn init(
             allocate: Allocator,
@@ -156,6 +209,7 @@ pub fn Cli(comptime CmdEnum: type) type {
             defer std.process.argsFree(self.alloc, args);
             var argList = try RawArgs.initCapacity(self.alloc, args.len);
             defer argList.deinit();
+
             try argList.appendSlice(args);
             // std.debug.print("All the cmds |{s}|\n", .{args});
             try self.parseAllArgs(&argList);
@@ -169,71 +223,70 @@ pub fn Cli(comptime CmdEnum: type) type {
 
             if (args.items.len < self.running_cmd.min_arg) return error.InsufficientArguments;
 
-            var removal_ranges = std.ArrayList(Range).init(self.alloc);
-            defer removal_ranges.deinit();
+            var pos_arg_list = std.ArrayList([]const u8).init(self.alloc);
+            errdefer self.deinitPosArgs();
+
+            var rest_arg_list = std.ArrayList([]const u8).init(self.alloc);
 
             //TODO: 1. Check for Duplicate arguments.
-            //TODO: 2. Check for Invalid Arguments.
-            if (self.running_cmd.options) |opts| {
-                for (opts) |opt| {
-                    var option_found = false;
-                    for (args.items, 0..) |arg, i| brk: {
-                        if (std.mem.startsWith(u8, arg, "--")) {
-                            if (arg.len == 2) @panic("TODO: rest not implemented");
-                            if (isHelpOption(arg)) return error.ShowHelp;
-                            if (isVersionOption(arg)) return error.ShowVersion;
-                            const kv_arg = try parseKVArg(args.items[i..]);
-                            if (kv_arg.value == null) return error.ValueRequired;
-                            if (std.mem.eql(u8, opt.long, kv_arg.key)) {
-                                try removal_ranges.append(.{ .start = i, .count = kv_arg.count });
-                                var copy_opt = opt;
-                                switch (opt.value) {
-                                    .bool => @panic("TODO: Long bool args not implemented"),
-                                    .str => {
-                                        copy_opt.is_alloc = true;
-                                        copy_opt.value = .{ .str = try self.alloc.dupe(u8, kv_arg.value.?) };
-                                        try self.computed_args.append(copy_opt);
-                                    },
-                                    .num => {
-                                        const num = std.fmt.parseInt(i32, kv_arg.value.?, 10) catch |e| switch (e) {
-                                            error.InvalidCharacter => null,
-                                            else => return e,
-                                        };
-                                        copy_opt.value = .{ .num = num };
-                                        try self.computed_args.append(copy_opt);
-                                    },
+            while (args.items.len > 0) {
+                const outer_arg = args.items[0];
+                if (outer_arg[0] == '-') {
+                    var i: usize = 0;
+                    while (args.items.len > i) : (i += 1) {
+                        const arg = args.items[0];
+                        if (self.running_cmd.options) |opts| {
+                            if (std.mem.startsWith(u8, arg, "--")) {
+                                if (arg.len == 2) @panic("TODO; rest not implemented");
+                                if (isHelpOption(arg)) return error.ShowHelp;
+                                if (isVersionOption(arg)) return error.ShowVersion;
+                                const kv_arg = try parseKVArg(args.items);
+                                var found_arg = false;
+
+                                //TODO: Maybe this for loop can be a hash map.
+                                for (opts) |opt| brk: {
+                                    if (std.mem.eql(u8, opt.long, kv_arg.key)) {
+                                        if (kv_arg.value == null) {
+                                            std.fmt.bufPrint(&self.err_msg, "Value required for {s}", .{kv_arg.key}) catch unreachable;
+                                            return error.ValueRequired;
+                                        }
+                                        try removeRangeInclusiveSafe(args, 0, kv_arg.count);
+                                        var copy_opt = opt;
+                                        switch (opt.value) {
+                                            .bool => @panic("TODO; Long bool args not implemented"),
+                                            .str => {
+                                                copy_opt.is_alloc = true;
+                                                copy_opt.value = .{ .str = try self.alloc.dupe(u8, kv_arg.value.?) };
+                                                try self.computed_args.append(copy_opt);
+                                            },
+                                            .num => {
+                                                const num = std.fmt.parseInt(i32, kv_arg.value.?, 10) catch |e| switch (e) {
+                                                    error.InvalidCharacter => null,
+                                                    else => return e,
+                                                };
+                                                copy_opt.value = .{ .num = num };
+                                                try self.computed_args.append(copy_opt);
+                                            },
+                                        }
+                                        found_arg = true;
+                                        break :brk;
+                                    }
                                 }
-                                option_found = true;
-                                break :brk;
-                            }
-                        } else if (std.mem.startsWith(u8, arg, "-")) @panic("TODO: short args not implemented");
-                    }
-                    if (!option_found) {
-                        // NOTE: If an argument has a default value and is not provided,
-                        // add it to computed_args.
-                        switch (opt.value) {
-                            .bool => |b| if (b != null) try self.computed_args.append(opt),
-                            .str => |s| if (s != null) try self.computed_args.append(opt),
-                            .num => |n| if (n != null) try self.computed_args.append(opt),
+                                if (!found_arg) {
+                                    std.debug.print("UnknownOption {s}\n", .{kv_arg.key});
+                                    return error.UnknownOption;
+                                }
+                            } else if (std.mem.startsWith(u8, arg, "-")) @panic("TODO: short args not implemented");
                         }
                     }
+                } else {
+                    const copied_arg = try self.alloc.dupe(u8, outer_arg);
+                    try pos_arg_list.append(copied_arg);
+                    _ = args.orderedRemove(0);
                 }
             }
-
-            var offset: usize = 0;
-            for (removal_ranges.items) |r| {
-                try removeRange(args, r.start -| offset, r.count);
-                offset += r.count;
-            }
-
-            var argList = std.ArrayList(u8).init(self.alloc);
-            std.debug.print("{?s}\n", .{args.items});
-            defer argList.deinit();
-            for (args.items) |arg| {
-                try argList.appendSlice(arg);
-                try argList.append(' ');
-            }
-            self.data = try argList.toOwnedSlice();
+            self.pos_args = try pos_arg_list.toOwnedSlice();
+            self.rest_args = try rest_arg_list.toOwnedSlice();
         }
 
         fn getCmd(self: Self, cmd: ?CmdEnum) CmdT {
@@ -332,10 +385,16 @@ pub fn Cli(comptime CmdEnum: type) type {
                 }
             }
         }
+        pub fn deinitPosArgs(self: *Self) void {
+            if (self.pos_args) |pos_args| {
+                for (pos_args) |pos_arg| self.alloc.free(pos_arg);
+                self.alloc.free(pos_args);
+            }
+        }
         pub fn deinit(self: *Self) void {
             for (self.computed_args.items) |*item| if (item.is_alloc) try item.value.free(self.alloc);
             self.computed_args.deinit();
-            self.alloc.free(self.data);
+            self.deinitPosArgs();
             // self.alloc.free(self.process_name);
         }
     };
@@ -419,6 +478,10 @@ test "removeRange removes correct elements" {
     try std.testing.expectEqualStrings("arg0", args.items[0]);
     try std.testing.expectEqualStrings("arg3", args.items[1]);
     try std.testing.expectEqualStrings("arg4", args.items[2]);
+    try removeRange(&args, 1, 1);
+    try std.testing.expectEqual(@as(usize, 2), args.items.len);
+    try std.testing.expectEqualStrings("arg0", args.items[0]);
+    try std.testing.expectEqualStrings("arg4", args.items[1]);
 }
 test "parseKeyValueArgs valid inputs" {
     const strEql = std.testing.expectEqualStrings;
