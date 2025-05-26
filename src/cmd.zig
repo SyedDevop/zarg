@@ -357,6 +357,10 @@ pub fn splitKeyValue(arg: []const u8) KeyValueArg {
         .count = 0,
     };
 }
+// BUG : the count of KeyValueArc can be wrong if the starting section is just
+// text. For current use case this this will work because we check if its a
+// flag before parsing.
+
 /// Parses command-line style key/value arguments.
 /// Supports:
 ///   --opt=value
