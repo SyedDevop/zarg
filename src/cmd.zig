@@ -142,6 +142,7 @@ pub fn Cli(comptime CmdEnum: type) type {
             // std.debug.print("All the cmds |{s}|\n", .{args});
             try self.parseAllArgs(&argList);
         }
+
         pub fn parseAllArgs(self: *Self, args: *RawArgs) !void {
             self.executable_name = args.orderedRemove(0);
             const cmdEnum = std.meta.stringToEnum(CmdEnum, if (args.items.len > 0) args.items[0] else "");
@@ -158,63 +159,73 @@ pub fn Cli(comptime CmdEnum: type) type {
 
             //TODO: 1. Check for Duplicate arguments.
             while (args.items.len > 0) {
-                const outer_arg = args.items[0];
-                if (outer_arg[0] == '-') {
-                    var i: usize = 0;
-                    while (args.items.len > i) : (i += 1) {
-                        const arg = args.items[0];
-                        if (self.running_cmd.options) |opts| {
-                            if (std.mem.startsWith(u8, arg, "--")) {
-                                if (arg.len == 2) @panic("TODO; rest not implemented");
-                                if (isHelpOption(arg)) return error.ShowHelp;
-                                if (isVersionOption(arg)) return error.ShowVersion;
-                                const kv_arg = try parseKVArg(args.items);
-                                var found_arg = false;
-
-                                //TODO: Maybe this for loop can be a hash map.
-                                for (opts) |opt| brk: {
-                                    if (std.mem.eql(u8, opt.long, kv_arg.key)) {
-                                        if (kv_arg.value == null) {
-                                            _ = std.fmt.bufPrint(&self.err_msg, "Value required for {s}", .{kv_arg.key}) catch unreachable;
-                                            return error.ValueRequired;
-                                        }
-                                        try slice.removeRangeInclusiveSafe(args, 0, kv_arg.count);
-                                        var copy_opt = opt;
-                                        switch (opt.value) {
-                                            .bool => @panic("TODO; Long bool args not implemented"),
-                                            .str => {
-                                                copy_opt.is_alloc = true;
-                                                copy_opt.value = .{ .str = try self.alloc.dupe(u8, kv_arg.value.?) };
-                                                try self.computed_args.append(copy_opt);
-                                            },
-                                            .num => {
-                                                const num = std.fmt.parseInt(i32, kv_arg.value.?, 10) catch |e| switch (e) {
-                                                    error.InvalidCharacter => null,
-                                                    else => return e,
-                                                };
-                                                copy_opt.value = .{ .num = num };
-                                                try self.computed_args.append(copy_opt);
-                                            },
-                                        }
-                                        found_arg = true;
-                                        break :brk;
-                                    }
-                                }
-                                if (!found_arg) {
-                                    std.debug.print("UnknownOption {s}\n", .{kv_arg.key});
-                                    return error.UnknownOption;
-                                }
-                            } else if (std.mem.startsWith(u8, arg, "-")) @panic("TODO: short args not implemented");
-                        }
-                    }
+                const arg = args.items[0];
+                if (arg[0] == '-') {
+                    try self.parseFlag(args);
                 } else {
-                    const copied_arg = try self.alloc.dupe(u8, outer_arg);
-                    try pos_arg_list.append(copied_arg);
+                    const copy = try self.alloc.dupe(u8, arg);
+                    try pos_arg_list.append(copy);
                     _ = args.orderedRemove(0);
                 }
             }
             self.pos_args = try pos_arg_list.toOwnedSlice();
             self.rest_args = try rest_arg_list.toOwnedSlice();
+        }
+
+        fn parseFlag(self: *Self, args: *RawArgs) !void {
+            if (self.running_cmd.options == null) return;
+
+            const opts = self.running_cmd.options.?;
+            const arg = args.items[0];
+
+            if (std.mem.startsWith(u8, arg, "--")) {
+                // if (arg.len == 2) @panic("TODO; rest not implemented");
+                if (isHelpOption(arg)) return error.ShowHelp;
+                if (isVersionOption(arg)) return error.ShowVersion;
+                const kv_arg = try parseKVArg(args.items);
+                try kv_arg.print();
+                var found_arg = false;
+
+                //TODO: Maybe this for loop can be a hash map.
+                for (opts) |opt| brk: {
+                    if (std.mem.eql(u8, opt.long, kv_arg.key)) {
+                        if (kv_arg.value == null) {
+                            _ = std.fmt.bufPrint(&self.err_msg, "Value required for {s}", .{kv_arg.key}) catch unreachable;
+                            return error.ValueRequired;
+                        }
+                        try slice.removeRangeInclusiveSafe(args, 0, kv_arg.count);
+                        var copy_opt = opt;
+                        switch (opt.value) {
+                            .bool => {
+                                const lower_value = try self.alloc.dupe(u8, kv_arg.value.?);
+                                defer self.alloc.free(lower_value);
+                                _ = std.ascii.lowerString(lower_value, lower_value);
+                                copy_opt.value = .{ .bool = std.mem.eql(u8, lower_value, "true") };
+                                try self.computed_args.append(copy_opt);
+                            },
+                            .str => {
+                                copy_opt.is_alloc = true;
+                                copy_opt.value = .{ .str = try self.alloc.dupe(u8, kv_arg.value.?) };
+                                try self.computed_args.append(copy_opt);
+                            },
+                            .num => {
+                                const num = std.fmt.parseInt(i32, kv_arg.value.?, 10) catch |e| switch (e) {
+                                    error.InvalidCharacter => null,
+                                    else => return e,
+                                };
+                                copy_opt.value = .{ .num = num };
+                                try self.computed_args.append(copy_opt);
+                            },
+                        }
+                        found_arg = true;
+                        break :brk;
+                    }
+                }
+                if (!found_arg) {
+                    std.debug.print("UnknownOption {s}\n", .{kv_arg.key});
+                    return error.UnknownOption;
+                }
+            } else if (std.mem.startsWith(u8, arg, "-")) @panic("TODO: short args not implemented");
         }
 
         fn getCmd(self: Self, cmd: ?CmdEnum) CmdT {
@@ -327,6 +338,7 @@ pub fn Cli(comptime CmdEnum: type) type {
         }
     };
 }
+
 /// Represents a parsed key-value argument
 ///
 /// Fields:

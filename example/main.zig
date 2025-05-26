@@ -46,6 +46,12 @@ const xmd = [_]CmdType{
                 .info = "",
                 .value = .{ .num = 10 },
             },
+            .{
+                .long = "--print",
+                .short = "-p",
+                .info = "Prints the result of the expression.",
+                .value = .{ .bool = null },
+            },
         },
         .min_arg = 0,
     },
