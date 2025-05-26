@@ -1,6 +1,8 @@
 const std = @import("std");
-const builtins = @import("builtin");
+const slice = @import("slice.zig");
 const Allocator = std.mem.Allocator;
+
+const RawArgs = slice.RawArgs;
 
 pub const CmdName = enum {
     root,
@@ -16,7 +18,6 @@ pub const CmdName = enum {
         return result.toOwnedSlice(); // Return only the filled portion of the array
     }
 };
-const RawArgs = std.ArrayList([]const u8);
 
 pub const ArgValue = union(enum) {
     str: ?[]const u8,
@@ -49,79 +50,6 @@ pub fn isVersionOption(opt: []const u8) bool {
     return (std.mem.eql(u8, "-v", opt) or std.mem.eql(u8, "--version", opt));
 }
 
-/// Safely removes up to `count` elements from `xs`, starting at `start_index`.
-///
-/// If the specified range would exceed the bounds of the array, it removes only the
-/// available number of elements from `start_index` to the end.
-///
-/// - If `start_index` is out of bounds (greater than or equal to `xs.items.len`), no elements are removed.
-/// - If `count` is too large to fit within the array, it is clamped to the maximum valid range.
-///
-/// This is a safe variant of `removeRange` that avoids out-of-bounds access.
-///
-/// Example:
-/// ```zig
-/// // Given an array [a, b, c, d], calling removeRangeSafe(&xs, 2, 5)
-/// // will remove [c, d], not error out.
-/// ```
-pub fn removeRangeSafe(xs: *RawArgs, start_index: usize, count: usize) !void {
-    if (start_index >= xs.items.len) return; // nothing to remove
-    const available = xs.items.len - start_index;
-    try removeRange(xs, start_index, @min(count, available));
-}
-
-/// Removes a range of elements from `xs`, starting at `start_index` and removing `count` elements.
-///
-/// This version removes exactly `count` elements.
-///
-/// Example: removeRange(&xs, 2, 3) will remove elements at indices 2, 3, and 4 (three elements total).
-pub fn removeRange(xs: *RawArgs, start_index: usize, count: usize) !void {
-    for (0..count) |_| {
-        _ = xs.orderedRemove(start_index);
-    }
-}
-
-/// Safely removes `count + 1` elements from `xs`, starting at `start_index`.
-///
-/// This is a safe variant of `removeRangeInclusive` that avoids out-of-bounds access.
-///
-/// from `start_index` up to and including `start_index + count`. If the requested
-/// range exceeds the bounds of the array, it clamps the removal to the valid portion.
-///
-/// - Does nothing if `start_index` is out of bounds.
-/// - Guarantees no out-of-bounds access.
-///
-/// Example:
-/// ```zig
-/// // Given [a, b, c, d], removeRangeInclusiveSafe(&xs, 2, 2)
-/// // attempts to remove [c, d] (indices 2, 3, 4), but only [c, d] are removed.
-/// ```
-pub fn removeRangeInclusiveSafe(xs: *RawArgs, start_index: usize, count: usize) !void {
-    if (start_index >= xs.items.len) return; // nothing to remove
-    const available = xs.items.len - start_index;
-    try removeRangeInclusive(xs, start_index, @min(count, available));
-}
-
-/// Removes a range of elements from `xs`, starting at `start_index` and removing `count + 1` elements.
-///
-/// This version includes the end index in the removal. That is, it removes from `start_index` to `start_index + count`, inclusive.
-///
-/// Example: removeRangeInclusive(&xs, 2, 3) will remove elements at indices 2, 3, 4, and 5 (four elements total).
-pub fn removeRangeInclusive(xs: *RawArgs, start_index: usize, count: usize) !void {
-    for (0..count + 1) |_| {
-        _ = xs.orderedRemove(start_index);
-    }
-}
-
-fn shift(comptime T: type, xs: *[]T) !T {
-    if (xs.len == 0) {
-        return error.EmptySlice;
-    }
-    const first = xs.*[0];
-    xs.ptr += 1;
-    xs.len -= 1;
-    return first;
-}
 pub fn Cmd(comptime CmdEnum: type) type {
     return struct {
         name: CmdEnum,
@@ -247,10 +175,10 @@ pub fn Cli(comptime CmdEnum: type) type {
                                 for (opts) |opt| brk: {
                                     if (std.mem.eql(u8, opt.long, kv_arg.key)) {
                                         if (kv_arg.value == null) {
-                                            std.fmt.bufPrint(&self.err_msg, "Value required for {s}", .{kv_arg.key}) catch unreachable;
+                                            _ = std.fmt.bufPrint(&self.err_msg, "Value required for {s}", .{kv_arg.key}) catch unreachable;
                                             return error.ValueRequired;
                                         }
-                                        try removeRangeInclusiveSafe(args, 0, kv_arg.count);
+                                        try slice.removeRangeInclusiveSafe(args, 0, kv_arg.count);
                                         var copy_opt = opt;
                                         switch (opt.value) {
                                             .bool => @panic("TODO; Long bool args not implemented"),
@@ -460,29 +388,6 @@ const TestCase = struct {
     expected_count: u3,
 };
 
-test "removeRange removes correct elements" {
-    const allocator = std.testing.allocator;
-    var args = RawArgs.init(allocator);
-    defer args.deinit();
-
-    try args.append("arg0");
-    try args.append("arg1");
-    try args.append("arg2");
-    try args.append("arg3");
-    try args.append("arg4");
-
-    // Remove elements from index 1 (arg1, arg2)
-    try removeRange(&args, 1, 2);
-
-    try std.testing.expectEqual(@as(usize, 3), args.items.len);
-    try std.testing.expectEqualStrings("arg0", args.items[0]);
-    try std.testing.expectEqualStrings("arg3", args.items[1]);
-    try std.testing.expectEqualStrings("arg4", args.items[2]);
-    try removeRange(&args, 1, 1);
-    try std.testing.expectEqual(@as(usize, 2), args.items.len);
-    try std.testing.expectEqualStrings("arg0", args.items[0]);
-    try std.testing.expectEqualStrings("arg4", args.items[1]);
-}
 test "parseKeyValueArgs valid inputs" {
     const strEql = std.testing.expectEqualStrings;
     const deepEql = std.testing.expectEqualDeep;

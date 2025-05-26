@@ -8,3 +8,8 @@ pub usingnamespace @import("color.zig");
 pub usingnamespace @import("cmd.zig");
 pub usingnamespace @import("term/term.zig");
 pub usingnamespace @import("term/clear.zig");
+
+test {
+    _ = @import("cmd.zig");
+    _ = @import("slice.zig");
+}
