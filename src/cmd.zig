@@ -1,25 +1,10 @@
 const std = @import("std");
 const slice = @import("slice.zig");
 const Allocator = std.mem.Allocator;
-
-// TODO: Create a proper error logger.
-
 const RawArgs = slice.RawArgs;
 
-pub const CmdName = enum {
-    root,
-
-    pub fn getCmdNameList(alloc: Allocator) ![]const u8 {
-        var result = std.ArrayList(u8).init(alloc);
-        inline for (@typeInfo(CmdName).Enum.fields) |field| {
-            if (field.value == 0) continue;
-            try result.appendSlice(field.name);
-            try result.append(' ');
-        }
-
-        return result.toOwnedSlice(); // Return only the filled portion of the array
-    }
-};
+//TODO: Create a proper error logger.
+//TODO: Check for Duplicate arguments.
 
 pub const ArgValue = union(enum) {
     str: ?[]const u8,
@@ -33,6 +18,7 @@ pub const ArgValue = union(enum) {
         }
     }
 };
+
 pub const Arg = struct {
     long: []const u8,
     short: []const u8,
@@ -41,14 +27,13 @@ pub const Arg = struct {
     //TODO : Do i need this,
     is_alloc: bool = false,
 };
-pub const ArgError = error{};
 
 pub const ArgsList = std.ArrayList(Arg);
 
-pub fn isHelpOption(opt: []const u8) bool {
+fn isHelpOption(opt: []const u8) bool {
     return (std.mem.eql(u8, "-h", opt) or std.mem.eql(u8, "--help", opt));
 }
-pub fn isVersionOption(opt: []const u8) bool {
+fn isVersionOption(opt: []const u8) bool {
     return (std.mem.eql(u8, "-v", opt) or std.mem.eql(u8, "--version", opt));
 }
 
@@ -113,15 +98,6 @@ pub fn Cli(comptime CmdEnum: type) type {
                             found = true;
                         }
                     }
-
-                    //TODO : Should root and sub commands be in same list
-                    // If not this will cause a compile error.
-                    // For just printing the a warning.
-
-                    if (!found) {
-                        //@compileError("Sub Command not found: " ++ field.name);
-                        //@compileLog("Sub Command not found: " ++ field.name);
-                    }
                 }
             }
             return .{
@@ -141,6 +117,7 @@ pub fn Cli(comptime CmdEnum: type) type {
             ValueRequired,
             UnknownOption,
         };
+
         pub fn parse(self: *Self) !void {
             const args = try std.process.argsAlloc(self.alloc);
             defer std.process.argsFree(self.alloc, args);
@@ -159,6 +136,7 @@ pub fn Cli(comptime CmdEnum: type) type {
                 else => return err,
             };
         }
+
         pub fn parseAllArgs(self: *Self, args: *RawArgs) !void {
             self.executable_name = args.orderedRemove(0);
             const cmdEnum = std.meta.stringToEnum(CmdEnum, if (args.items.len > 0) args.items[0] else "");
@@ -170,7 +148,6 @@ pub fn Cli(comptime CmdEnum: type) type {
 
             var pos_arg_list = std.ArrayList([]const u8).init(self.alloc);
 
-            //TODO: 1. Check for Duplicate arguments.
             while (args.items.len > 0) {
                 const arg = args.items[0];
                 if (arg[0] == '-') {
@@ -201,13 +178,12 @@ pub fn Cli(comptime CmdEnum: type) type {
             const arg = args.items[0];
 
             if (std.mem.startsWith(u8, arg, "--")) {
-                // if (arg.len == 2) @panic("TODO; rest not implemented");
                 const kv_arg = try parseKVArg(args.items);
                 try kv_arg.print();
                 var found_arg = false;
 
                 //TODO: Maybe this for loop can be a hash map.
-                for (opts) |opt| brk: {
+                for (opts) |opt| {
                     if (std.mem.eql(u8, opt.long, kv_arg.key)) {
                         if (kv_arg.value == null) {
                             _ = std.fmt.bufPrint(&self.err_msg, "--{s}", .{kv_arg.key}) catch unreachable;
@@ -238,9 +214,10 @@ pub fn Cli(comptime CmdEnum: type) type {
                             },
                         }
                         found_arg = true;
-                        break :brk;
+                        break;
                     }
                 }
+
                 if (!found_arg) {
                     _ = try std.fmt.bufPrint(&self.err_msg, "--{s}", .{kv_arg.key});
                     return CliParseError.UnknownOption;
@@ -248,10 +225,11 @@ pub fn Cli(comptime CmdEnum: type) type {
             } else if (std.mem.startsWith(u8, arg, "-")) {
                 const short_flags = arg[1..];
                 var j: usize = 0;
+
                 while (j < short_flags.len) : (j += 1) {
                     const short_flag = short_flags[j .. j + 1];
                     var found_arg = false;
-                    for (opts) |opt| brk: {
+                    for (opts) |opt| {
                         if (std.mem.eql(u8, opt.short[1..], short_flag)) {
                             var copy_opt = opt;
                             switch (opt.value) {
@@ -291,7 +269,7 @@ pub fn Cli(comptime CmdEnum: type) type {
                                 },
                             }
                             found_arg = true;
-                            break :brk;
+                            break;
                         }
                     }
                     if (!found_arg) {
@@ -305,9 +283,7 @@ pub fn Cli(comptime CmdEnum: type) type {
 
         fn getCmd(self: Self, cmd: ?CmdEnum) CmdT {
             if (cmd == null) return self.cmds[0];
-            for (self.cmds) |value| {
-                if (value.name == cmd) return value;
-            }
+            for (self.cmds) |value| if (value.name == cmd) return value;
             return self.cmds[0];
         }
 
@@ -334,6 +310,7 @@ pub fn Cli(comptime CmdEnum: type) type {
             }
             return null;
         }
+
         pub fn getBoolArg(self: Self, arg_name: []const u8) !bool {
             for (self.computed_args.items) |arg| {
                 if (std.mem.eql(u8, arg.long, arg_name) or std.mem.eql(u8, arg.short, arg_name)) {
@@ -399,18 +376,21 @@ pub fn Cli(comptime CmdEnum: type) type {
                 }
             }
         }
+
         fn deinitPosArgs(self: *Self) void {
             if (self.pos_args) |pos_args| {
                 for (pos_args) |pos_arg| self.alloc.free(pos_arg);
                 self.alloc.free(pos_args);
             }
         }
+
         fn deinitRestArgs(self: *Self) void {
             if (self.rest_args) |rest_args| {
                 for (rest_args) |rest_arg| self.alloc.free(rest_arg);
                 self.alloc.free(rest_args);
             }
         }
+
         pub fn deinit(self: *Self) void {
             for (self.computed_args.items) |*item| if (item.is_alloc) try item.value.free(self.alloc);
             self.computed_args.deinit();
