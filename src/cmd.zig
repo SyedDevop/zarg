@@ -2,6 +2,8 @@ const std = @import("std");
 const slice = @import("slice.zig");
 const Allocator = std.mem.Allocator;
 
+// TODO: Create a proper error logger.
+
 const RawArgs = slice.RawArgs;
 
 pub const CmdName = enum {
@@ -85,7 +87,7 @@ pub fn Cli(comptime CmdEnum: type) type {
         pos_args: ?[][]const u8 = null,
 
         /// Rest of the arguments after '--'.
-        rest_args: ?[]const []const u8 = null,
+        rest_args: ?[][]const u8 = null,
 
         version: []const u8,
 
@@ -132,17 +134,31 @@ pub fn Cli(comptime CmdEnum: type) type {
                 .computed_args = ArgsList.init(allocate),
             };
         }
+        const CliParseError = error{
+            InsufficientArguments,
+            ShowHelp,
+            ShowVersion,
+            ValueRequired,
+            UnknownOption,
+        };
         pub fn parse(self: *Self) !void {
             const args = try std.process.argsAlloc(self.alloc);
             defer std.process.argsFree(self.alloc, args);
             var argList = try RawArgs.initCapacity(self.alloc, args.len);
             defer argList.deinit();
-
             try argList.appendSlice(args);
-            // std.debug.print("All the cmds |{s}|\n", .{args});
-            try self.parseAllArgs(&argList);
+            self.parseAllArgs(&argList) catch |err| switch (err) {
+                CliParseError.ShowHelp => {
+                    try self.help();
+                    std.process.exit(0);
+                },
+                CliParseError.ShowVersion => {
+                    std.debug.print("{s} {s}", .{ self.name, self.version });
+                    std.process.exit(0);
+                },
+                else => return err,
+            };
         }
-
         pub fn parseAllArgs(self: *Self, args: *RawArgs) !void {
             self.executable_name = args.orderedRemove(0);
             const cmdEnum = std.meta.stringToEnum(CmdEnum, if (args.items.len > 0) args.items[0] else "");
@@ -150,17 +166,24 @@ pub fn Cli(comptime CmdEnum: type) type {
             if (self.cmds[0].name != cmd.name) _ = args.orderedRemove(0);
             self.running_cmd = cmd;
 
-            if (args.items.len < self.running_cmd.min_arg) return error.InsufficientArguments;
+            if (args.items.len < self.running_cmd.min_arg) return CliParseError.InsufficientArguments;
 
             var pos_arg_list = std.ArrayList([]const u8).init(self.alloc);
-            errdefer self.deinitPosArgs();
-
-            var rest_arg_list = std.ArrayList([]const u8).init(self.alloc);
 
             //TODO: 1. Check for Duplicate arguments.
             while (args.items.len > 0) {
                 const arg = args.items[0];
                 if (arg[0] == '-') {
+                    if (std.mem.eql(u8, arg, "--")) {
+                        const rest_args = try self.alloc.alloc([]const u8, args.items.len - 1);
+                        for (args.items[1..], 0..) |rest, i| {
+                            rest_args[i] = try self.alloc.dupe(u8, rest);
+                        }
+                        self.rest_args = rest_args;
+                        break;
+                    }
+                    if (isHelpOption(arg)) return CliParseError.ShowHelp;
+                    if (isVersionOption(arg)) return CliParseError.ShowVersion;
                     try self.parseFlag(args);
                 } else {
                     const copy = try self.alloc.dupe(u8, arg);
@@ -169,7 +192,6 @@ pub fn Cli(comptime CmdEnum: type) type {
                 }
             }
             self.pos_args = try pos_arg_list.toOwnedSlice();
-            self.rest_args = try rest_arg_list.toOwnedSlice();
         }
 
         fn parseFlag(self: *Self, args: *RawArgs) !void {
@@ -180,8 +202,6 @@ pub fn Cli(comptime CmdEnum: type) type {
 
             if (std.mem.startsWith(u8, arg, "--")) {
                 // if (arg.len == 2) @panic("TODO; rest not implemented");
-                if (isHelpOption(arg)) return error.ShowHelp;
-                if (isVersionOption(arg)) return error.ShowVersion;
                 const kv_arg = try parseKVArg(args.items);
                 try kv_arg.print();
                 var found_arg = false;
@@ -190,8 +210,8 @@ pub fn Cli(comptime CmdEnum: type) type {
                 for (opts) |opt| brk: {
                     if (std.mem.eql(u8, opt.long, kv_arg.key)) {
                         if (kv_arg.value == null) {
-                            _ = std.fmt.bufPrint(&self.err_msg, "Value required for {s}", .{kv_arg.key}) catch unreachable;
-                            return error.ValueRequired;
+                            _ = std.fmt.bufPrint(&self.err_msg, "--{s}", .{kv_arg.key}) catch unreachable;
+                            return CliParseError.ValueRequired;
                         }
                         try slice.removeRangeInclusiveSafe(args, 0, kv_arg.count);
                         var copy_opt = opt;
@@ -222,10 +242,65 @@ pub fn Cli(comptime CmdEnum: type) type {
                     }
                 }
                 if (!found_arg) {
-                    std.debug.print("UnknownOption {s}\n", .{kv_arg.key});
-                    return error.UnknownOption;
+                    _ = try std.fmt.bufPrint(&self.err_msg, "--{s}", .{kv_arg.key});
+                    return CliParseError.UnknownOption;
                 }
-            } else if (std.mem.startsWith(u8, arg, "-")) @panic("TODO: short args not implemented");
+            } else if (std.mem.startsWith(u8, arg, "-")) {
+                const short_flags = arg[1..];
+                var j: usize = 0;
+                while (j < short_flags.len) : (j += 1) {
+                    const short_flag = short_flags[j .. j + 1];
+                    var found_arg = false;
+                    for (opts) |opt| brk: {
+                        if (std.mem.eql(u8, opt.short[1..], short_flag)) {
+                            var copy_opt = opt;
+                            switch (opt.value) {
+                                .bool => {
+                                    copy_opt.value = .{ .bool = true };
+                                    try self.computed_args.append(copy_opt);
+                                },
+                                else => {
+                                    if (j < short_flags.len - 1) {
+                                        _ = try std.fmt.bufPrint(&self.err_msg, "-{c} ({c})", .{ short_flag, opt.short });
+                                        return error.NumberStringGroupedFlagInLast;
+                                    }
+
+                                    const kv_arg = try parseKVArg(args.items[1..]);
+                                    try kv_arg.print();
+                                    if (kv_arg.value == null) {
+                                        _ = std.fmt.bufPrint(&self.err_msg, "--{s}", .{kv_arg.key}) catch unreachable;
+                                        return CliParseError.ValueRequired;
+                                    }
+                                    try slice.removeRangeInclusiveSafe(args, 1, kv_arg.count);
+                                    switch (opt.value) {
+                                        .str => {
+                                            copy_opt.is_alloc = true;
+                                            copy_opt.value = .{ .str = try self.alloc.dupe(u8, kv_arg.value.?) };
+                                            try self.computed_args.append(copy_opt);
+                                        },
+                                        .num => {
+                                            const num = std.fmt.parseInt(i32, kv_arg.value.?, 10) catch |e| switch (e) {
+                                                error.InvalidCharacter => null,
+                                                else => return e,
+                                            };
+                                            copy_opt.value = .{ .num = num };
+                                            try self.computed_args.append(copy_opt);
+                                        },
+                                        else => unreachable,
+                                    }
+                                },
+                            }
+                            found_arg = true;
+                            break :brk;
+                        }
+                    }
+                    if (!found_arg) {
+                        _ = try std.fmt.bufPrint(&self.err_msg, "-{s}", .{short_flag});
+                        return CliParseError.UnknownOption;
+                    }
+                }
+                try slice.removeRange(args, 0, 1);
+            }
         }
 
         fn getCmd(self: Self, cmd: ?CmdEnum) CmdT {
@@ -324,17 +399,23 @@ pub fn Cli(comptime CmdEnum: type) type {
                 }
             }
         }
-        pub fn deinitPosArgs(self: *Self) void {
+        fn deinitPosArgs(self: *Self) void {
             if (self.pos_args) |pos_args| {
                 for (pos_args) |pos_arg| self.alloc.free(pos_arg);
                 self.alloc.free(pos_args);
+            }
+        }
+        fn deinitRestArgs(self: *Self) void {
+            if (self.rest_args) |rest_args| {
+                for (rest_args) |rest_arg| self.alloc.free(rest_arg);
+                self.alloc.free(rest_args);
             }
         }
         pub fn deinit(self: *Self) void {
             for (self.computed_args.items) |*item| if (item.is_alloc) try item.value.free(self.alloc);
             self.computed_args.deinit();
             self.deinitPosArgs();
-            // self.alloc.free(self.process_name);
+            self.deinitRestArgs();
         }
     };
 }
@@ -369,17 +450,12 @@ pub fn splitKeyValue(arg: []const u8) KeyValueArg {
         .count = 0,
     };
 }
+
 // BUG : the count of KeyValueArc can be wrong if the starting section is just
 // text. For current use case this this will work because we check if its a
 // flag before parsing.
 
 /// Parses command-line style key/value arguments.
-/// Supports:
-///   --opt=value
-///   --opt value
-///   --opt = value
-///   --opt =value
-///   --opt= value
 pub fn parseKVArg(cmds: []const []const u8) !KeyValueArg {
     if (cmds.len == 0) return error.EmptyArg;
     const startsWith = std.mem.startsWith;

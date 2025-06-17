@@ -52,6 +52,24 @@ const xmd = [_]CmdType{
                 .info = "Prints the result of the expression.",
                 .value = .{ .bool = null },
             },
+            .{
+                .long = "--eee",
+                .short = "-e",
+                .info = "Prints the result of the expression.",
+                .value = .{ .bool = null },
+            },
+            .{
+                .long = "--fffff",
+                .short = "-f",
+                .info = "Prints the result of the expression.",
+                .value = .{ .bool = null },
+            },
+            .{
+                .long = "--ggggg",
+                .short = "-g",
+                .info = "Prints the result of the expression.",
+                .value = .{ .bool = null },
+            },
         },
         .min_arg = 0,
     },
@@ -82,14 +100,14 @@ pub fn main() !void {
     defer _ = gpa.deinit();
 
     var cli = try zarg.Cli(UserCmd)
-        .init(allocator, "", "", "", &xmd);
-
+        .init(allocator, "Z Math", "", "v1.0.0", &xmd);
     defer cli.deinit();
 
     try cli.parse();
-    std.debug.print("The Input is {?s}\n", .{cli.pos_args});
 
     std.debug.print("The Command is |{?s}|\n", .{@tagName(cli.running_cmd.name)});
+    std.debug.print("The Command Rest Command |{?s}|\n", .{cli.rest_args});
+    std.debug.print("The Input is {?s}\n", .{cli.pos_args});
     switch (cli.running_cmd.name) {
         .add => {
             const a = if (try cli.getNumArg("-a")) |a| a else 0;
