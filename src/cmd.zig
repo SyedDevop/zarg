@@ -243,13 +243,13 @@ pub fn Cli(comptime CmdEnum: type) type {
                                         return error.NumberStringGroupedFlagInLast;
                                     }
 
-                                    const kv_arg = try parseKVArg(args.items[1..]);
+                                    const kv_arg = try parseKVArg(args.items);
                                     try kv_arg.print();
                                     if (kv_arg.value == null) {
                                         _ = std.fmt.bufPrint(&self.err_msg, "--{s}", .{kv_arg.key}) catch unreachable;
                                         return CliParseError.ValueRequired;
                                     }
-                                    try slice.removeRangeInclusiveSafe(args, 1, kv_arg.count);
+                                    try slice.removeRangeSafe(args, 1, kv_arg.count);
                                     switch (opt.value) {
                                         .str => {
                                             copy_opt.is_alloc = true;
