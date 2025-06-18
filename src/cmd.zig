@@ -5,6 +5,7 @@ const RawArgs = slice.RawArgs;
 
 //TODO: Create a proper error logger.
 //TODO: Check for Duplicate arguments.
+//TODO: Nested Subcommands
 
 pub const ArgValue = union(enum) {
     str: ?[]const u8,
@@ -413,7 +414,7 @@ pub const KeyValueArg = struct {
     count: u2,
 
     fn print(self: *const KeyValueArg) !void {
-        std.debug.print("KeyValueArg: key:{s} Val:{?s} Con:{d}\n", .{ self.key, self.value, self.count });
+        std.debug.print("KeyValueArg: key:{s:4} Val:{?s} Con:{d}\n", .{ self.key, self.value, self.count });
     }
 };
 
@@ -475,6 +476,8 @@ test "parseKeyValueArgs valid inputs" {
         .{ .input = &.{"--option"}, .expected_key = "--option", .expected_value = null, .expected_count = 0 },
         .{ .input = &.{"--option="}, .expected_key = "--option", .expected_value = null, .expected_count = 0 },
         .{ .input = &.{ "--option", "=" }, .expected_key = "--option", .expected_value = null, .expected_count = 0 },
+        .{ .input = &.{ "--option", "LOAD_OP=10" }, .expected_key = "--option", .expected_value = "LOAD_OP=10", .expected_count = 1 },
+        .{ .input = &.{ "--option", "=", "LOAD_OP=10" }, .expected_key = "--option", .expected_value = "LOAD_OP=10", .expected_count = 2 },
     };
 
     for (cases, 0..) |test_case, i| {
