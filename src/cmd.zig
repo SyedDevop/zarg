@@ -6,6 +6,7 @@ const RawArgs = slice.RawArgs;
 //TODO: Create a proper error logger.
 //TODO: Check for Duplicate arguments.
 //TODO: Nested Subcommands
+//TODO: Code lean up reduce the Duplicate code.
 
 pub const ArgValue = union(enum) {
     str: ?[]const u8,
@@ -127,25 +128,28 @@ pub fn Cli(comptime CmdEnum: type) type {
         /// @import you need to Free the message your self.
         pub fn getErrorMessage(self: *const Self, err: anyerror) !?[]u8 {
             return switch (err) {
-                CliParseError.InsufficientArguments => try std.fmt.allocPrint(self.alloc, "Error: Not enough arguments provided. Please check the command usage.", .{}),
-                CliParseError.ValueRequired => try std.fmt.allocPrint(self.alloc, "Error: A value is required for option '{s}'.", .{self.err_msg}),
-                CliParseError.UnknownOption => try std.fmt.allocPrint(self.alloc, "Error: Unrecognized option '{s}'. Use '--help' to list available options.", .{self.err_msg}),
-                CliParseError.NumberStringGroupedFlagInLast => try std.fmt.allocPrint(self.alloc, "Error: The grouped flag {s} must be the final flag in the group.", .{self.err_msg}),
+                CliParseError.InsufficientArguments => try std.fmt.allocPrint(self.alloc, "Not enough arguments provided. Please check the command usage.", .{}),
+                CliParseError.ValueRequired => try std.fmt.allocPrint(self.alloc, "A value is required for option '{s}'.", .{self.err_msg}),
+                CliParseError.UnknownOption => try std.fmt.allocPrint(self.alloc, "Unrecognized option '{s}'. Use '--help' to list available options.", .{self.err_msg}),
+                CliParseError.NumberStringGroupedFlagInLast => try std.fmt.allocPrint(self.alloc, "The grouped flag {s} must be the final flag in the group.", .{self.err_msg}),
 
-                CliParseError.ShowVersion => try std.fmt.allocPrint(self.alloc, "{s} {s}", .{ self.name, self.version }),
+                CliParseError.ShowVersion => {
+                    std.debug.print("{s} {s}", .{ self.name, self.version });
+                    return null;
+                },
                 CliParseError.ShowHelp => {
                     try self.help();
                     return null;
                 },
 
-                else => try std.fmt.allocPrint(self.alloc, "Error: An unknown error occurred during argument parsing.", .{}),
+                else => try std.fmt.allocPrint(self.alloc, "An unknown error occurred during argument parsing.", .{}),
             };
         }
 
         pub fn printParseError(self: *const Self, err: anyerror) !void {
             if (try self.getErrorMessage(err)) |message| {
                 defer self.alloc.free(message);
-                std.debug.print("{s}\n", .{message});
+                std.debug.print("\x1B[1;38;5;197m[Error]: \x1B[0m{s}\n \x1B[0m", .{message});
             }
         }
 
