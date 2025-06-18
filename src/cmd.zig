@@ -148,6 +148,10 @@ pub fn Cli(comptime CmdEnum: type) type {
             if (args.items.len < self.running_cmd.min_arg) return CliParseError.InsufficientArguments;
 
             var pos_arg_list = std.ArrayList([]const u8).init(self.alloc);
+            errdefer {
+                for (pos_arg_list.items) |pos_arg| self.alloc.free(pos_arg);
+                pos_arg_list.deinit();
+            }
 
             while (args.items.len > 0) {
                 const arg = args.items[0];
