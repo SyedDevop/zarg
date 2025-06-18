@@ -106,10 +106,13 @@ pub fn main() !void {
     defer _ = gpa.deinit();
 
     var cli = try zarg.Cli(UserCmd)
-        .init(allocator, "Z Math", "", "v1.0.0", &xmd);
+        .init(allocator, "Z Math", USAGE, "v1.0.0", &xmd);
     defer cli.deinit();
 
-    try cli.parse();
+    cli.parse() catch |err| {
+        try cli.printParseError(err);
+        return;
+    };
 
     std.debug.print("The Command is     |{?s}|\n", .{@tagName(cli.running_cmd.name)});
     std.debug.print("The Input is       |{?s}|\n", .{cli.pos_args});
