@@ -49,6 +49,14 @@ pub fn Cmd(comptime CmdEnum: type) type {
     };
 }
 
+pub const CliParseError = error{
+    InsufficientArguments,
+    ShowHelp,
+    ShowVersion,
+    ValueRequired,
+    UnknownOption,
+    NumberStringGroupedFlagInLast,
+};
 pub fn Cli(comptime CmdEnum: type) type {
     comptime {
         if (@typeInfo(CmdEnum) != .Enum) {
@@ -77,7 +85,9 @@ pub fn Cli(comptime CmdEnum: type) type {
 
         version: []const u8,
 
-        err_msg: [255]u8 = undefined,
+        err_msg: []u8 = undefined,
+        err_msg_buf: [255]u8 = undefined,
+
         /// The First command is always the root command
         pub fn init(
             allocate: Allocator,
@@ -111,31 +121,43 @@ pub fn Cli(comptime CmdEnum: type) type {
                 .computed_args = ArgsList.init(allocate),
             };
         }
-        const CliParseError = error{
-            InsufficientArguments,
-            ShowHelp,
-            ShowVersion,
-            ValueRequired,
-            UnknownOption,
-        };
+
+        /// This function return formatted Error message for CliParseError.
+        ///
+        /// @import you need to Free the message your self.
+        pub fn getErrorMessage(self: *const Self, err: anyerror) !?[]u8 {
+            return switch (err) {
+                CliParseError.InsufficientArguments => try std.fmt.allocPrint(self.alloc, "Error: Not enough arguments provided. Please check the command usage.", .{}),
+                CliParseError.ValueRequired => try std.fmt.allocPrint(self.alloc, "Error: A value is required for option '{s}'.", .{self.err_msg}),
+                CliParseError.UnknownOption => try std.fmt.allocPrint(self.alloc, "Error: Unrecognized option '{s}'. Use '--help' to list available options.", .{self.err_msg}),
+                CliParseError.NumberStringGroupedFlagInLast => try std.fmt.allocPrint(self.alloc, "Error: The grouped flag {s} must be the final flag in the group.", .{self.err_msg}),
+
+                CliParseError.ShowVersion => try std.fmt.allocPrint(self.alloc, "{s} {s}", .{ self.name, self.version }),
+                CliParseError.ShowHelp => {
+                    try self.help();
+                    return null;
+                },
+
+                else => try std.fmt.allocPrint(self.alloc, "Error: An unknown error occurred during argument parsing.", .{}),
+            };
+        }
+
+        pub fn printParseError(self: *const Self, err: anyerror) !void {
+            if (try self.getErrorMessage(err)) |message| {
+                defer self.alloc.free(message);
+                std.debug.print("{s}\n", .{message});
+            }
+        }
 
         pub fn parse(self: *Self) !void {
             const args = try std.process.argsAlloc(self.alloc);
             defer std.process.argsFree(self.alloc, args);
+
             var argList = try RawArgs.initCapacity(self.alloc, args.len);
             defer argList.deinit();
             try argList.appendSlice(args);
-            self.parseAllArgs(&argList) catch |err| switch (err) {
-                CliParseError.ShowHelp => {
-                    try self.help();
-                    std.process.exit(0);
-                },
-                CliParseError.ShowVersion => {
-                    std.debug.print("{s} {s}", .{ self.name, self.version });
-                    std.process.exit(0);
-                },
-                else => return err,
-            };
+
+            try self.parseAllArgs(&argList);
         }
 
         pub fn parseAllArgs(self: *Self, args: *RawArgs) !void {
@@ -184,14 +206,14 @@ pub fn Cli(comptime CmdEnum: type) type {
 
             if (std.mem.startsWith(u8, arg, "--")) {
                 const kv_arg = try parseKVArg(args.items);
-                try kv_arg.print();
+                // try kError: The grouped fliv_arg.print();
                 var found_arg = false;
 
                 //TODO: Maybe this for loop can be a hash map.
                 for (opts) |opt| {
                     if (std.mem.eql(u8, opt.long, kv_arg.key)) {
                         if (kv_arg.value == null) {
-                            _ = std.fmt.bufPrint(&self.err_msg, "--{s}", .{kv_arg.key}) catch unreachable;
+                            self.err_msg = try std.fmt.bufPrint(&self.err_msg_buf, "--{s}", .{kv_arg.key});
                             return CliParseError.ValueRequired;
                         }
                         try slice.removeRangeInclusiveSafe(args, 0, kv_arg.count);
@@ -224,7 +246,7 @@ pub fn Cli(comptime CmdEnum: type) type {
                 }
 
                 if (!found_arg) {
-                    _ = try std.fmt.bufPrint(&self.err_msg, "--{s}", .{kv_arg.key});
+                    self.err_msg = try std.fmt.bufPrint(&self.err_msg_buf, "--{s}", .{kv_arg.key});
                     return CliParseError.UnknownOption;
                 }
             } else if (std.mem.startsWith(u8, arg, "-")) {
@@ -244,14 +266,14 @@ pub fn Cli(comptime CmdEnum: type) type {
                                 },
                                 else => {
                                     if (j < short_flags.len - 1) {
-                                        _ = try std.fmt.bufPrint(&self.err_msg, "-{c} ({c})", .{ short_flag, opt.short });
-                                        return error.NumberStringGroupedFlagInLast;
+                                        self.err_msg = try std.fmt.bufPrint(&self.err_msg_buf, "'-{s}' is invalid — the flag '{s}'", .{ short_flags, opt.short });
+                                        return CliParseError.NumberStringGroupedFlagInLast;
                                     }
 
                                     const kv_arg = try parseKVArg(args.items);
-                                    try kv_arg.print();
+                                    // try kv_arg.print();
                                     if (kv_arg.value == null) {
-                                        _ = std.fmt.bufPrint(&self.err_msg, "--{s}", .{kv_arg.key}) catch unreachable;
+                                        self.err_msg = std.fmt.bufPrint(&self.err_msg_buf, "--{s}", .{kv_arg.key}) catch unreachable;
                                         return CliParseError.ValueRequired;
                                     }
                                     try slice.removeRangeSafe(args, 1, kv_arg.count);
@@ -278,7 +300,7 @@ pub fn Cli(comptime CmdEnum: type) type {
                         }
                     }
                     if (!found_arg) {
-                        _ = try std.fmt.bufPrint(&self.err_msg, "-{s}", .{short_flag});
+                        self.err_msg = try std.fmt.bufPrint(&self.err_msg_buf, "-{s}", .{short_flag});
                         return CliParseError.UnknownOption;
                     }
                 }
@@ -382,14 +404,14 @@ pub fn Cli(comptime CmdEnum: type) type {
             }
         }
 
-        fn deinitPosArgs(self: *Self) void {
+        pub fn deinitPosArgs(self: *Self) void {
             if (self.pos_args) |pos_args| {
                 for (pos_args) |pos_arg| self.alloc.free(pos_arg);
                 self.alloc.free(pos_args);
             }
         }
 
-        fn deinitRestArgs(self: *Self) void {
+        pub fn deinitRestArgs(self: *Self) void {
             if (self.rest_args) |rest_args| {
                 for (rest_args) |rest_arg| self.alloc.free(rest_arg);
                 self.alloc.free(rest_args);
