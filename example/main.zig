@@ -70,6 +70,12 @@ const xmd = [_]CmdType{
                 .info = "Prints the result of the expression.",
                 .value = .{ .bool = null },
             },
+            .{
+                .long = "--o",
+                .short = "-o",
+                .info = "Prints the result of the expression.",
+                .value = .{ .str = null },
+            },
         },
         .min_arg = 0,
     },
@@ -105,16 +111,20 @@ pub fn main() !void {
 
     try cli.parse();
 
-    std.debug.print("The Command is |{?s}|\n", .{@tagName(cli.running_cmd.name)});
-    std.debug.print("The Command Rest Command |{?s}|\n", .{cli.rest_args});
-    std.debug.print("The Input is {?s}\n", .{cli.pos_args});
+    std.debug.print("The Command is     |{?s}|\n", .{@tagName(cli.running_cmd.name)});
+    std.debug.print("The Input is       |{?s}|\n", .{cli.pos_args});
+    std.debug.print("The Rest Input is  |{?s}|\n", .{cli.rest_args});
     switch (cli.running_cmd.name) {
         .add => {
             const a = if (try cli.getNumArg("-a")) |a| a else 0;
             const b = if (try cli.getNumArg("-b")) |b| b else 0;
             const c = if (try cli.getNumArg("-c")) |c| c else 0;
             for (cli.computed_args.items) |v| {
-                std.debug.print("Computed args V:{?} L:{s} S:{s} \n", .{ v.value, v.long, v.short });
+                switch (v.value) {
+                    .str => |s| std.debug.print("<str > Computed args V:{?s} L:{s} S:{s} \n", .{ s, v.long, v.short }),
+                    .bool => |bo| std.debug.print("<bool> Computed args V:{?}  L:{s} S:{s} \n", .{ bo, v.long, v.short }),
+                    .num => |n| std.debug.print("<num > Computed args V:{?d} L:{s} S:{s} \n", .{ n, v.long, v.short }),
+                }
             }
             std.debug.print("The Command is add(a:{d}, b:{d}, c:{d})  {d}\n", .{ a, b, c, a + b + c });
         },
