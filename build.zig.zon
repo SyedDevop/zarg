@@ -1,6 +1,8 @@
 .{
-    .name = "zarg",
+    .name = .zarg,
+
     .version = "0.1.0",
+    .fingerprint = 0xa20cd17cc53388c7,
     .dependencies = .{},
     .paths = .{
         "build.zig",

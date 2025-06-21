@@ -10,12 +10,16 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/zarg.zig"),
     });
 
-    // Build static library for zarg
-    const lib = b.addStaticLibrary(.{
-        .name = "zarg",
+    const lib_mod = b.createModule(.{
         .root_source_file = b.path("src/zarg.zig"),
         .target = target,
         .optimize = optimize,
+    });
+    // Build static library for zarg
+    const lib = b.addLibrary(.{
+        .linkage = .static,
+        .name = "zarg",
+        .root_module = lib_mod,
     });
     b.installArtifact(lib);
 
@@ -42,9 +46,11 @@ pub fn build(b: *std.Build) void {
     // Example executable that uses the zarg library
     const simple = b.addExecutable(.{
         .name = "simple",
-        .root_source_file = b.path("example/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("example/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     simple.root_module.addImport("zarg", zargPkg);
     b.installArtifact(simple);

@@ -71,7 +71,7 @@ pub const CliParseError = error{
 };
 pub fn Cli(comptime CmdEnum: type) type {
     comptime {
-        if (@typeInfo(CmdEnum) != .Enum) {
+        if (@typeInfo(CmdEnum) != .@"enum") {
             @compileError("CmdEnum must be an enum type; Found  " ++ @typeName(CmdEnum));
         }
     }
@@ -110,7 +110,7 @@ pub fn Cli(comptime CmdEnum: type) type {
         ) !Self {
             comptime {
                 if (commands.len <= 0) @compileError("You need to provided At list one command.");
-                const enum_fields = @typeInfo(CmdEnum).Enum.fields;
+                const enum_fields = @typeInfo(CmdEnum).@"enum".fields;
                 for (enum_fields) |field| {
                     var found = false;
                     for (commands) |sb_cmd| {
