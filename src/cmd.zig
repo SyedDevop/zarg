@@ -334,9 +334,10 @@ pub fn Cli(comptime CmdEnum: type) type {
         }
 
         /// Returns the positional argument at the given index if available.
-        ///
-        /// if the positional argument at the given index is not available, returns null
-        /// if the positional arguments are not available, returns null
+        /// Note:
+        ///     ! Important '0' based indexing.
+        ///     if the positional argument at the given index is not available, returns null
+        ///     if the positional arguments are not available, returns null
         pub fn getPosArg(self: *const Self, pos_index: usize) ?[]const u8 {
             if (self.pos_args == null) return null;
             if (pos_index >= self.pos_args.?.len) return null;
