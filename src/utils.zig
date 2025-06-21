@@ -83,3 +83,13 @@ pub inline fn comptimeCsi(comptime fmt: []const u8, args: anytype) []const u8 {
     const str = "\x1b[" ++ fmt;
     return std.fmt.comptimePrint(str, args);
 }
+
+/// Logs a message to stderr with the source location of the call site.
+///
+/// - `msg`: The log message to display.
+/// - `loc`: A `@SourceLocation` value, typically provided by `@src()`, indicating
+///          where in the source code the log call occurred.
+pub fn logLocMessage(msg: []const u8, loc: std.builtin.SourceLocation) void {
+    const stderr = std.io.getStdErr().writer();
+    stderr.print("{s}:{d}:{d}: {s}\n", .{ loc.file, loc.line, loc.column, msg }) catch {};
+}

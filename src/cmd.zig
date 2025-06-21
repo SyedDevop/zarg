@@ -1,5 +1,6 @@
 const std = @import("std");
 const slice = @import("slice.zig");
+const util = @import("utils.zig");
 const Allocator = std.mem.Allocator;
 const RawArgs = slice.RawArgs;
 
@@ -12,6 +13,7 @@ pub const ArgValue = union(enum) {
     str: ?[]const u8,
     bool: ?bool,
     num: ?i32,
+    list: ?[][]const u8,
 
     pub fn free(self: *ArgValue, allocator: Allocator) !void {
         switch (self.*) {
@@ -243,6 +245,7 @@ pub fn Cli(comptime CmdEnum: type) type {
                                 copy_opt.value = .{ .num = num };
                                 try self.computed_args.append(copy_opt);
                             },
+                            .list => util.logLocMessage("TODO: List Not implemented", @src()),
                         }
                         found_arg = true;
                         break;
@@ -295,7 +298,8 @@ pub fn Cli(comptime CmdEnum: type) type {
                                             copy_opt.value = .{ .num = num };
                                             try self.computed_args.append(copy_opt);
                                         },
-                                        else => unreachable,
+                                        .list => @panic("TODO: List Not implemented"),
+                                        .bool => unreachable,
                                     }
                                 },
                             }

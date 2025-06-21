@@ -76,6 +76,12 @@ const xmd = [_]CmdType{
                 .info = "Prints the result of the expression.",
                 .value = .{ .str = null },
             },
+            .{
+                .long = "--l",
+                .short = "-l",
+                .info = "",
+                .value = .{ .list = null },
+            },
         },
         .min_arg = 0,
     },
@@ -127,6 +133,7 @@ pub fn main() !void {
                     .str => |s| std.debug.print("<str > Computed args V:{?s} L:{s} S:{s} \n", .{ s, v.long, v.short }),
                     .bool => |bo| std.debug.print("<bool> Computed args V:{?}  L:{s} S:{s} \n", .{ bo, v.long, v.short }),
                     .num => |n| std.debug.print("<num > Computed args V:{?d} L:{s} S:{s} \n", .{ n, v.long, v.short }),
+                    .list => |l| std.debug.print("<list> Computed args V:{?s} L:{s} S:{s} \n", .{ l, v.long, v.short }),
                 }
             }
             std.debug.print("The Command is add(a:{d}, b:{d}, c:{d})  {d}\n", .{ a, b, c, a + b + c });
