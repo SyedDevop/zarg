@@ -11,7 +11,7 @@ const USAGE =
 const CmdType = zarg.Cmd(UserCmd);
 
 const xmd = [_]CmdType{
-    .{
+    CmdType{
         .name = .root,
         .usage = " [OPTIONS] \"EXPRESSION\"",
         .options = &.{
@@ -27,6 +27,7 @@ const xmd = [_]CmdType{
     .{
         .name = .add,
         .usage = " [OPTIONS] \"EXPRESSION\"",
+        .min_pos_arg = 1,
         .options = &.{
             .{
                 .long = "--a",
@@ -131,6 +132,8 @@ pub fn main() !void {
             if (try cli.getBoolArg("-p")) {
                 std.debug.print("{s}\n", .{cli.executable_name});
                 return;
+            } else if (cli.getPosArg(0)) |pos| {
+                std.debug.print("This is lit {s}\n", .{pos});
             }
             for (cli.computed_args.items) |v| {
                 switch (v.value) {

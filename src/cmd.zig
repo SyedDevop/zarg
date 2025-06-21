@@ -47,7 +47,15 @@ pub fn Cmd(comptime CmdEnum: type) type {
         usage: []const u8,
         example: ?[]const u8 = null,
         info: ?[]const u8 = null,
+
+        /// Minimum arguments required.
+        /// default is 1.
         min_arg: u8 = 1,
+
+        /// Minimum position arguments required.
+        /// default is 0
+        min_pos_arg: u8 = 0,
+
         options: ?[]const Arg = null,
     };
 }
@@ -58,6 +66,7 @@ pub const CliParseError = error{
     ShowVersion,
     ValueRequired,
     UnknownOption,
+    MinPosArg,
     NumberStringGroupedFlagInLast,
 };
 pub fn Cli(comptime CmdEnum: type) type {
@@ -134,6 +143,7 @@ pub fn Cli(comptime CmdEnum: type) type {
                 CliParseError.ValueRequired => try std.fmt.allocPrint(self.alloc, "A value is required for option '{s}'.", .{self.err_msg}),
                 CliParseError.UnknownOption => try std.fmt.allocPrint(self.alloc, "Unrecognized option '{s}'. Use '--help' to list available options.", .{self.err_msg}),
                 CliParseError.NumberStringGroupedFlagInLast => try std.fmt.allocPrint(self.alloc, "The grouped flag {s} must be the final flag in the group.", .{self.err_msg}),
+                CliParseError.MinPosArg => try std.fmt.allocPrint(self.alloc, "The command '{s}' requires at least {d} positional argument(s).", .{ @tagName(self.running_cmd.name), self.running_cmd.min_pos_arg }),
 
                 CliParseError.ShowVersion => {
                     std.debug.print("{s} {s}", .{ self.name, self.version });
@@ -201,6 +211,7 @@ pub fn Cli(comptime CmdEnum: type) type {
                     _ = args.orderedRemove(0);
                 }
             }
+            if (pos_arg_list.items.len < self.running_cmd.min_pos_arg) return CliParseError.MinPosArg;
             self.pos_args = try pos_arg_list.toOwnedSlice();
         }
 
@@ -320,6 +331,16 @@ pub fn Cli(comptime CmdEnum: type) type {
             if (cmd == null) return self.cmds[0];
             for (self.cmds) |value| if (value.name == cmd) return value;
             return self.cmds[0];
+        }
+
+        /// Returns the positional argument at the given index if available.
+        ///
+        /// if the positional argument at the given index is not available, returns null
+        /// if the positional arguments are not available, returns null
+        pub fn getPosArg(self: *const Self, pos_index: usize) ?[]const u8 {
+            if (self.pos_args == null) return null;
+            if (pos_index >= self.pos_args.?.len) return null;
+            return self.pos_args.?[pos_index];
         }
 
         pub fn getStrArg(self: Self, arg_name: []const u8) !?[]const u8 {
