@@ -388,7 +388,7 @@ pub fn Cli(comptime CmdEnum: type) type {
             const padding = 20;
             const stdout = std.io.getStdOut().writer();
             if (self.description) |dis| {
-                try stdout.print("Z Math {s}\n{s}\n\n", .{ self.version, dis });
+                try stdout.print("{s} {s}\n{s}\n\n", .{ self.name, self.version, dis });
             }
             const cmd_opt = self.running_cmd;
             try stdout.print("USAGE: \n", .{});
