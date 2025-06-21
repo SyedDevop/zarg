@@ -13,7 +13,7 @@ const CmdType = zarg.Cmd(UserCmd);
 const xmd = [_]CmdType{
     .{
         .name = .root,
-        .usage = "m [OPTIONS] \"EXPRESSION\"",
+        .usage = " [OPTIONS] \"EXPRESSION\"",
         .options = &.{
             .{
                 .long = "--print",
@@ -26,7 +26,7 @@ const xmd = [_]CmdType{
     },
     .{
         .name = .add,
-        .usage = "m [OPTIONS] \"EXPRESSION\"",
+        .usage = " [OPTIONS] \"EXPRESSION\"",
         .options = &.{
             .{
                 .long = "--a",
@@ -47,9 +47,9 @@ const xmd = [_]CmdType{
                 .value = .{ .num = 10 },
             },
             .{
-                .long = "--print",
+                .long = "--path",
                 .short = "-p",
-                .info = "Prints the result of the expression.",
+                .info = "Prints the the path to the executable.",
                 .value = .{ .bool = null },
             },
             .{
@@ -128,6 +128,10 @@ pub fn main() !void {
             const a = if (try cli.getNumArg("-a")) |a| a else 0;
             const b = if (try cli.getNumArg("-b")) |b| b else 0;
             const c = if (try cli.getNumArg("-c")) |c| c else 0;
+            if (try cli.getBoolArg("-p")) {
+                std.debug.print("{s}\n", .{cli.executable_name});
+                return;
+            }
             for (cli.computed_args.items) |v| {
                 switch (v.value) {
                     .str => |s| std.debug.print("<str > Computed args V:{?s} L:{s} S:{s} \n", .{ s, v.long, v.short }),

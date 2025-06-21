@@ -167,7 +167,7 @@ pub fn Cli(comptime CmdEnum: type) type {
         }
 
         pub fn parseAllArgs(self: *Self, args: *RawArgs) !void {
-            self.executable_name = args.orderedRemove(0);
+            self.executable_name = try self.alloc.dupe(u8, args.orderedRemove(0));
             const cmdEnum = std.meta.stringToEnum(CmdEnum, if (args.items.len > 0) args.items[0] else "");
             const cmd = self.getCmd(cmdEnum);
             if (self.cmds[0].name != cmd.name) _ = args.orderedRemove(0);
@@ -219,7 +219,7 @@ pub fn Cli(comptime CmdEnum: type) type {
                 for (opts) |opt| {
                     if (std.mem.eql(u8, opt.long, kv_arg.key)) {
                         if (kv_arg.value == null) {
-                            self.err_msg = try std.fmt.bufPrint(&self.err_msg_buf, "--{s}", .{kv_arg.key});
+                            self.err_msg = try std.fmt.bufPrint(&self.err_msg_buf, "{s}", .{kv_arg.key});
                             return CliParseError.ValueRequired;
                         }
                         try slice.removeRangeInclusiveSafe(args, 0, kv_arg.count);
@@ -253,7 +253,7 @@ pub fn Cli(comptime CmdEnum: type) type {
                 }
 
                 if (!found_arg) {
-                    self.err_msg = try std.fmt.bufPrint(&self.err_msg_buf, "--{s}", .{kv_arg.key});
+                    self.err_msg = try std.fmt.bufPrint(&self.err_msg_buf, "{s}", .{kv_arg.key});
                     return CliParseError.UnknownOption;
                 }
             } else if (std.mem.startsWith(u8, arg, "-")) {
@@ -280,7 +280,7 @@ pub fn Cli(comptime CmdEnum: type) type {
                                     const kv_arg = try parseKVArg(args.items);
                                     // try kv_arg.print();
                                     if (kv_arg.value == null) {
-                                        self.err_msg = std.fmt.bufPrint(&self.err_msg_buf, "--{s}", .{kv_arg.key}) catch unreachable;
+                                        self.err_msg = std.fmt.bufPrint(&self.err_msg_buf, "{s}", .{kv_arg.key}) catch unreachable;
                                         return CliParseError.ValueRequired;
                                     }
                                     try slice.removeRangeSafe(args, 1, kv_arg.count);
@@ -370,7 +370,7 @@ pub fn Cli(comptime CmdEnum: type) type {
             }
             const cmd_opt = self.running_cmd;
             try stdout.print("USAGE: \n", .{});
-            try stdout.print("  {s}\n\n", .{cmd_opt.usage});
+            try stdout.print("  {s} {s}\n\n", .{ std.fs.path.basename(self.executable_name), cmd_opt.usage });
             if (cmd_opt.info) |info| {
                 try stdout.print("INFO: \n", .{});
                 try stdout.print("  {s}\n\n", .{info});
@@ -431,6 +431,7 @@ pub fn Cli(comptime CmdEnum: type) type {
             self.computed_args.deinit();
             self.deinitPosArgs();
             self.deinitRestArgs();
+            self.alloc.free(self.executable_name);
         }
     };
 }
