@@ -31,6 +31,11 @@ pub const ArgValue = union(enum) {
     }
 };
 
+const VersionType = union(enum) {
+    str: []const u8,
+    fun: *const fn () anyerror!void,
+};
+
 pub const Arg = struct {
     long: []const u8,
     short: []const u8,
@@ -127,7 +132,7 @@ pub fn Cli(comptime CmdEnum: type) type {
         /// Rest of the arguments after '--'.
         rest_args: ?[][]const u8 = null,
 
-        version: []const u8,
+        version: VersionType,
 
         err_msg: []u8 = undefined,
         err_msg_buf: [255]u8 = undefined,
@@ -139,7 +144,7 @@ pub fn Cli(comptime CmdEnum: type) type {
             allocate: Allocator,
             name: []const u8,
             description: ?[]const u8,
-            version: []const u8,
+            version: VersionType,
             comptime commands: []const CmdT,
         ) !Self {
             comptime {
@@ -202,7 +207,10 @@ pub fn Cli(comptime CmdEnum: type) type {
                 CliParseError.MinPosArg => try std.fmt.allocPrint(self.alloc, "The command '{s}' requires at least {d} positional argument(s).", .{ @tagName(self.running_cmd.name), self.running_cmd.min_pos_arg }),
 
                 CliParseError.ShowVersion => {
-                    std.debug.print("{s} {s}", .{ self.name, self.version });
+                    try switch (self.version) {
+                        .str => |v| std.debug.print("{s} {s}", .{ self.name, v }),
+                        .fun => |f| f(),
+                    };
                     return null;
                 },
                 CliParseError.ShowHelp => {
@@ -443,7 +451,11 @@ pub fn Cli(comptime CmdEnum: type) type {
         pub fn help(self: Self) !void {
             const stdout = std.io.getStdOut().writer();
             if (self.description) |dis| {
-                try stdout.print("{s} {s}\n{s}\n\n", .{ self.name, self.version, dis });
+                const version = switch (self.version) {
+                    .str => |s| s,
+                    .fun => "",
+                };
+                try stdout.print("{s} {s}\n{s}\n\n", .{ self.name, version, dis });
             }
             const cmd_opt = self.running_cmd;
             try stdout.print("USAGE: \n", .{});

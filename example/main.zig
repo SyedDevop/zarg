@@ -109,13 +109,18 @@ pub const UserCmd = enum {
     remove,
     list,
 };
+
+fn prinVersion() !void {
+    std.debug.print("Hello thiws s a sd as d asd a sd  da", .{});
+}
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
     defer _ = gpa.deinit();
 
     var cli = try zarg.Cli(UserCmd)
-        .init(allocator, "Z Math", USAGE, "v1.0.0", &xmd);
+        .init(allocator, "Z Math", USAGE, .{ .fun = &prinVersion }, &xmd);
     defer cli.deinit();
 
     cli.parse() catch |err| {
