@@ -24,9 +24,10 @@ const xmd = [_]CmdType{
         },
         .min_arg = 0,
     },
-    .{
+    CmdType{
         .name = .add,
         .usage = " [OPTIONS] \"EXPRESSION\"",
+        .info = "Add two numbers.",
         .min_pos_arg = 1,
         .options = &.{
             .{
@@ -89,11 +90,12 @@ const xmd = [_]CmdType{
     .{
         .name = .list,
         .usage = "m [OPTIONS] \"EXPRESSION\"",
+        .info = "List the names of the directories in the current directory.",
         .options = &.{
             .{
                 .long = "--print",
                 .short = "-p",
-                .info = "Prints the result of the expression.",
+                .info = "PPrints the result of the expression.Prints the result of the expression.Prints the result of the expression.rints the result of the expression.",
                 .value = .{ .str = null },
             },
         },

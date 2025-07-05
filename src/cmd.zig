@@ -1,13 +1,21 @@
-const std = @import("std");
-const slice = @import("slice.zig");
-const util = @import("utils.zig");
 const Allocator = std.mem.Allocator;
-const RawArgs = slice.RawArgs;
 
+const slice = @import("slice.zig");
+const RawArgs = slice.RawArgs;
+const util = @import("utils.zig");
+
+const std = @import("std");
 //TODO: Create a proper error logger.
 //TODO: Check for Duplicate arguments.
 //TODO: Nested Subcommands
 //TODO: Code lean up reduce the Duplicate code.
+
+const MaxArgStrLens = struct {
+    short: usize = 3,
+    long: usize = 10,
+    info: usize = 40,
+    cmd: usize = 5,
+};
 
 pub const ArgValue = union(enum) {
     str: ?[]const u8,
@@ -30,6 +38,30 @@ pub const Arg = struct {
     value: ArgValue,
     //TODO : Do i need this,
     is_alloc: bool = false,
+
+    fn getValueType(self: *const Arg) []const u8 {
+        return switch (self.value) {
+            .str => "<str >",
+            .list => "<list>",
+            .num => "<num >",
+            .bool => "",
+        };
+    }
+};
+
+const DEFAULT_ARGS = [2]Arg{
+    .{
+        .long = "--help",
+        .short = "-h",
+        .info = "Show this help message and exit.",
+        .value = ArgValue{ .bool = null },
+    },
+    .{
+        .long = "--version",
+        .short = "-v",
+        .info = "Print version information and exit.",
+        .value = ArgValue{ .bool = null },
+    },
 };
 
 pub const ArgsList = std.ArrayList(Arg);
@@ -100,6 +132,8 @@ pub fn Cli(comptime CmdEnum: type) type {
         err_msg: []u8 = undefined,
         err_msg_buf: [255]u8 = undefined,
 
+        max_str_len: MaxArgStrLens = undefined,
+
         /// The First command is always the root command
         pub fn init(
             allocate: Allocator,
@@ -123,6 +157,10 @@ pub fn Cli(comptime CmdEnum: type) type {
                     }
                 }
             }
+            const max: MaxArgStrLens = comptime brk: {
+                break :brk maxStrLens(commands);
+            };
+
             return .{
                 .alloc = allocate,
                 .name = name,
@@ -131,7 +169,25 @@ pub fn Cli(comptime CmdEnum: type) type {
                 .running_cmd = commands[0],
                 .version = version,
                 .computed_args = ArgsList.init(allocate),
+                .max_str_len = max,
             };
+        }
+
+        inline fn maxStrLens(comptime cmds: []const CmdT) MaxArgStrLens {
+            var max = MaxArgStrLens{};
+            comptime {
+                for (cmds) |c| {
+                    max.cmd = @max(max.cmd, @tagName(c.name).len);
+                    if (c.options) |opts| {
+                        for (opts) |op| {
+                            max.long = @max(max.long, op.long.len);
+                            max.short = @max(max.short, op.short.len);
+                            max.info = @max(max.info, op.info.len);
+                        }
+                    }
+                }
+            }
+            return max;
         }
 
         /// This function return formatted Error message for CliParseError.
@@ -385,7 +441,6 @@ pub fn Cli(comptime CmdEnum: type) type {
         }
 
         pub fn help(self: Self) !void {
-            const padding = 20;
             const stdout = std.io.getStdOut().writer();
             if (self.description) |dis| {
                 try stdout.print("{s} {s}\n{s}\n\n", .{ self.name, self.version, dis });
@@ -402,36 +457,63 @@ pub fn Cli(comptime CmdEnum: type) type {
                 try stdout.print("  {s}\n\n", .{ex});
             }
             try stdout.print("OPTIONS: \n", .{});
-            if (cmd_opt.options) |opt| {
-                for (opt) |value| {
-                    var opt_len: usize = 0;
-                    opt_len += value.short.len;
-                    try stdout.print(" {s},", .{value.short});
-
-                    opt_len += value.long.len;
-                    try stdout.print(" {s}", .{value.long});
-
-                    for (0..(padding - opt_len)) |_| {
-                        try stdout.print(" ", .{});
-                    }
-                    try stdout.print("{s}\n", .{value.info});
-                }
-            }
-            try stdout.print(" -h, --help            Help message.\n", .{});
-            try stdout.print(" -v, --version         App version.\n", .{});
-            try stdout.print("\n", .{});
-            if (cmd_opt.name != .root) return;
+            const opt_print_fmt = try self.generateArgsPrintFmt(&cmd_opt);
+            defer self.alloc.free(opt_print_fmt);
+            try stdout.print("{s}\n\n", .{opt_print_fmt});
+            // TODO: The cmds will be printed for root cmd the first.
+            // Change this in future when sub cmds are supported
+            if (cmd_opt.name != self.cmds[0].name) return;
             try stdout.print("COMMANDS: \n", .{});
-            for (self.cmds) |value| {
-                if (value.info) |info| {
-                    const name = @tagName(value.name);
-                    try stdout.print(" {s}", .{name});
-                    for (0..(padding - name.len)) |_| {
-                        try stdout.print(" ", .{});
-                    }
-                    try stdout.print("{s}\n", .{info});
+
+            const cmd_print_str = try self.generateCmdPrintFmt();
+            defer self.alloc.free(cmd_print_str);
+            try stdout.print("{s}\n\n", .{cmd_print_str});
+        }
+
+        fn generateArgsPrintFmt(self: Self, cmd: *const CmdT) ![]const u8 {
+            var cmd_fmt = std.ArrayList(u8).init(self.alloc);
+            var cmd_writer = cmd_fmt.writer();
+            const max = self.max_str_len;
+            if (cmd.options) |opt| {
+                for (opt) |value| {
+                    for (0..max.short - value.short.len) |_| try cmd_fmt.append(' ');
+                    try cmd_fmt.appendSlice(value.short);
+                    for (0..max.long - value.long.len) |_| try cmd_fmt.append(' ');
+                    try cmd_fmt.appendSlice(value.long);
+                    try cmd_writer.print(" {s:6}", .{value.getValueType()});
+                    for (0..(2)) |_| try cmd_fmt.append(' ');
+                    try cmd_fmt.appendSlice(value.info);
+                    try cmd_fmt.append('\n');
                 }
             }
+            for (DEFAULT_ARGS) |value| {
+                for (0..max.short - value.short.len) |_| try cmd_fmt.append(' ');
+                try cmd_fmt.appendSlice(value.short);
+                for (0..max.long - value.long.len) |_| try cmd_fmt.append(' ');
+                try cmd_fmt.appendSlice(value.long);
+                try cmd_writer.print(" {s:6}", .{value.getValueType()});
+                for (0..(2)) |_| try cmd_fmt.append(' ');
+                try cmd_fmt.appendSlice(value.info);
+                try cmd_fmt.append('\n');
+            }
+            return try cmd_fmt.toOwnedSlice();
+        }
+
+        fn generateCmdPrintFmt(self: Self) ![]const u8 {
+            var cmd_fmt = std.ArrayList(u8).init(self.alloc);
+
+            for (self.cmds) |value| {
+                if (value.name == self.cmds[0].name) continue;
+                const name = @tagName(value.name);
+                const name_pad = self.max_str_len.cmd - name.len;
+                for (0..name_pad) |_| try cmd_fmt.append(' ');
+                try cmd_fmt.appendSlice(name);
+                try cmd_fmt.appendSlice(":    ");
+                try cmd_fmt.appendSlice(value.info orelse "");
+                try cmd_fmt.append('\n');
+            }
+
+            return try cmd_fmt.toOwnedSlice();
         }
 
         pub fn deinitPosArgs(self: *Self) void {
