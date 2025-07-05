@@ -31,9 +31,10 @@ pub const ArgValue = union(enum) {
     }
 };
 
+pub const VersionCallFrom = enum { version, help };
 const VersionType = union(enum) {
     str: []const u8,
-    fun: *const fn () anyerror!void,
+    fun: *const fn (_: VersionCallFrom) []const u8,
 };
 
 pub const Arg = struct {
@@ -207,10 +208,11 @@ pub fn Cli(comptime CmdEnum: type) type {
                 CliParseError.MinPosArg => try std.fmt.allocPrint(self.alloc, "The command '{s}' requires at least {d} positional argument(s).", .{ @tagName(self.running_cmd.name), self.running_cmd.min_pos_arg }),
 
                 CliParseError.ShowVersion => {
-                    try switch (self.version) {
-                        .str => |v| std.debug.print("{s} {s}", .{ self.name, v }),
-                        .fun => |f| f(),
+                    const version = switch (self.version) {
+                        .str => |v| v,
+                        .fun => |f| f(.version),
                     };
+                    std.debug.print("{s} {s}", .{ self.name, version });
                     return null;
                 },
                 CliParseError.ShowHelp => {
@@ -453,7 +455,7 @@ pub fn Cli(comptime CmdEnum: type) type {
             if (self.description) |dis| {
                 const version = switch (self.version) {
                     .str => |s| s,
-                    .fun => "",
+                    .fun => |f| f(.help),
                 };
                 try stdout.print("{s} {s}\n{s}\n\n", .{ self.name, version, dis });
             }

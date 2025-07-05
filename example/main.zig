@@ -110,8 +110,11 @@ pub const UserCmd = enum {
     list,
 };
 
-fn prinVersion() !void {
-    std.debug.print("Hello thiws s a sd as d asd a sd  da", .{});
+fn printVersion(version_call: zarg.VersionCallFrom) []const u8 {
+    return switch (version_call) {
+        .version => "Game  on \n V1000",
+        .help => "V 1.0.0.0",
+    };
 }
 
 pub fn main() !void {
@@ -120,7 +123,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
 
     var cli = try zarg.Cli(UserCmd)
-        .init(allocator, "Z Math", USAGE, .{ .fun = &prinVersion }, &xmd);
+        .init(allocator, "Z Math", USAGE, .{ .fun = &printVersion }, &xmd);
     defer cli.deinit();
 
     cli.parse() catch |err| {
