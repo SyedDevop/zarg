@@ -138,8 +138,6 @@ pub fn Cli(comptime CmdEnum: type) type {
         err_msg: []u8 = undefined,
         err_msg_buf: [255]u8 = undefined,
 
-        max_str_len: MaxArgStrLens = undefined,
-
         /// The First command is always the root command
         pub fn init(
             allocate: Allocator,
@@ -163,9 +161,6 @@ pub fn Cli(comptime CmdEnum: type) type {
                     }
                 }
             }
-            const max: MaxArgStrLens = comptime brk: {
-                break :brk maxStrLens(commands);
-            };
 
             return .{
                 .alloc = allocate,
@@ -175,22 +170,25 @@ pub fn Cli(comptime CmdEnum: type) type {
                 .running_cmd = commands[0],
                 .version = version,
                 .computed_args = ArgsList.init(allocate),
-                .max_str_len = max,
             };
         }
 
-        inline fn maxStrLens(comptime cmds: []const CmdT) MaxArgStrLens {
+        inline fn maxCmdStrLens(cmds: []const CmdT) MaxArgStrLens {
             var max = MaxArgStrLens{};
-            comptime {
-                for (cmds) |c| {
-                    max.cmd = @max(max.cmd, @tagName(c.name).len);
-                    if (c.options) |opts| {
-                        for (opts) |op| {
-                            max.long = @max(max.long, op.long.len);
-                            max.short = @max(max.short, op.short.len);
-                            max.info = @max(max.info, op.info.len);
-                        }
-                    }
+            for (cmds) |cmd| {
+                max.cmd = @max(max.cmd, @tagName(cmd.name).len);
+            }
+            return max;
+        }
+
+        inline fn maxStrLens(cmd: *const CmdT) MaxArgStrLens {
+            var max = MaxArgStrLens{};
+            max.cmd = @max(max.cmd, @tagName(cmd.name).len);
+            if (cmd.options) |opts| {
+                for (opts) |op| {
+                    max.long = @max(max.long, op.long.len);
+                    max.short = @max(max.short, op.short.len);
+                    max.info = @max(max.info, op.info.len);
                 }
             }
             return max;
@@ -410,6 +408,16 @@ pub fn Cli(comptime CmdEnum: type) type {
             return self.pos_args.?[pos_index];
         }
 
+        pub fn getAllPosArgAsStr(self: *const Self) !?[]const u8 {
+            if (self.pos_args == null) return null;
+            var pos_list = std.ArrayList(u8).init(self.alloc);
+            for (self.pos_args.?) |pos_arg| {
+                try pos_list.appendSlice(pos_arg);
+                try pos_list.append(' ');
+            }
+            return try pos_list.toOwnedSlice();
+        }
+
         pub fn getStrArg(self: Self, arg_name: []const u8) !?[]const u8 {
             for (self.computed_args.items) |arg| {
                 if (std.mem.eql(u8, arg.long, arg_name) or std.mem.eql(u8, arg.short, arg_name)) {
@@ -487,11 +495,12 @@ pub fn Cli(comptime CmdEnum: type) type {
         fn generateArgsPrintFmt(self: Self, cmd: *const CmdT) ![]const u8 {
             var cmd_fmt = std.ArrayList(u8).init(self.alloc);
             var cmd_writer = cmd_fmt.writer();
-            const max = self.max_str_len;
+            const max = maxStrLens(cmd);
             if (cmd.options) |opt| {
                 for (opt) |value| {
                     for (0..max.short - value.short.len) |_| try cmd_fmt.append(' ');
                     try cmd_fmt.appendSlice(value.short);
+                    try cmd_fmt.appendSlice(", ");
                     for (0..max.long - value.long.len) |_| try cmd_fmt.append(' ');
                     try cmd_fmt.appendSlice(value.long);
                     try cmd_writer.print(" {s:6}", .{value.getValueType()});
@@ -503,6 +512,7 @@ pub fn Cli(comptime CmdEnum: type) type {
             for (DEFAULT_ARGS) |value| {
                 for (0..max.short - value.short.len) |_| try cmd_fmt.append(' ');
                 try cmd_fmt.appendSlice(value.short);
+                try cmd_fmt.appendSlice(", ");
                 for (0..max.long - value.long.len) |_| try cmd_fmt.append(' ');
                 try cmd_fmt.appendSlice(value.long);
                 try cmd_writer.print(" {s:6}", .{value.getValueType()});
@@ -515,11 +525,11 @@ pub fn Cli(comptime CmdEnum: type) type {
 
         fn generateCmdPrintFmt(self: Self) ![]const u8 {
             var cmd_fmt = std.ArrayList(u8).init(self.alloc);
-
+            const max = maxCmdStrLens(self.cmds);
             for (self.cmds) |value| {
                 if (value.name == self.cmds[0].name) continue;
                 const name = @tagName(value.name);
-                const name_pad = self.max_str_len.cmd - name.len;
+                const name_pad = max.cmd - name.len;
                 for (0..name_pad) |_| try cmd_fmt.append(' ');
                 try cmd_fmt.appendSlice(name);
                 try cmd_fmt.appendSlice(":    ");
