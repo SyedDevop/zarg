@@ -94,6 +94,9 @@ pub fn Cmd(comptime CmdEnum: type) type {
         /// default is 0
         min_pos_arg: u8 = 0,
 
+        /// Print the Help if the minimum position argument are not met.
+        print_help_for_min_pos_arg: bool = false,
+
         options: ?[]const Arg = null,
     };
 }
@@ -225,7 +228,8 @@ pub fn Cli(comptime CmdEnum: type) type {
         pub fn printParseError(self: *const Self, err: anyerror) !void {
             if (try self.getErrorMessage(err)) |message| {
                 defer self.alloc.free(message);
-                std.debug.print("\x1B[1;38;5;197m[Error]: \x1B[0m{s}\n \x1B[0m", .{message});
+                std.debug.print("\x1B[1;38;5;197m[Error]: \x1B[0m{s}\n\n \x1B[0m", .{message});
+                if (self.running_cmd.print_help_for_min_pos_arg) try self.help();
             }
         }
 
