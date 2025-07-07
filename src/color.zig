@@ -83,24 +83,84 @@ pub const Padding = struct {
     up: u8 = 0,
     down: u8 = 0,
     pub fn inLine(start: u8, end: u8) Padding {
-        return Padding{ .left = start, .right = end };
+        return .{ .left = start, .right = end };
     }
     pub fn block(start: u8, end: u8) Padding {
-        return Padding{ .up = start, .down = end };
+        return .{ .up = start, .down = end };
     }
     pub fn all(p: u8) Padding {
-        return Padding{ .up = p, .down = p, .left = p, .right = p };
+        return .{ .up = p, .down = p, .left = p, .right = p };
     }
 };
+
+pub const Black = Colors{ .Ansi4 = 0 };
+pub const Red = Colors{ .Ansi4 = 1 };
+pub const Green = Colors{ .Ansi4 = 2 };
+pub const Yellow = Colors{ .Ansi4 = 3 };
+pub const Blue = Colors{ .Ansi4 = 4 };
+pub const Magenta = Colors{ .Ansi4 = 5 };
+pub const Cyan = Colors{ .Ansi4 = 6 };
+pub const White = Colors{ .Ansi4 = 7 };
+
+pub const BrightBlack = Colors{ .Ansi4 = 8 };
+pub const BrightRed = Colors{ .Ansi4 = 9 };
+pub const BrightGreen = Colors{ .Ansi4 = 10 };
+pub const BrightYellow = Colors{ .Ansi4 = 11 };
+pub const BrightBlue = Colors{ .Ansi4 = 12 };
+pub const BrightMagenta = Colors{ .Ansi4 = 13 };
+pub const BrightCyan = Colors{ .Ansi4 = 14 };
+pub const BrightWhite = Colors{ .Ansi4 = 15 };
+
 pub const Colors = union(enum) {
+    /// 4-bit ANSI color (0–15).
+    /// Includes both standard (0–7) and bright (8–15) ANSI colors.
+    Ansi4: u4,
+
+    /// 8-bit extended ANSI color (0–255).
+    /// - 0–15: Standard and bright ANSI colors (same as Ansi3 and Ansi4).
+    /// - 16–231: 6×6×6 RGB color cube.
+    /// - 232–255: Grayscale colors.
+    Ansi8: u8,
+
+    /// 24-bit true color (RGB).
+    /// Allows specifying full 16.7 million colors (8 bits per channel).
     RGB: struct {
         r: u8,
         g: u8,
         b: u8,
     },
-    Plate: u8,
     pub fn toRGB(r: u8, g: u8, b: u8) Colors {
         return .{ .RGB = .{ .r = r, .g = g, .b = b } };
+    }
+
+    pub fn hexToRGB(hex: u24) Colors {
+        const r: u8 = @intCast((hex >> 8 * 2) & 0xff);
+        const g: u8 = @intCast((hex >> 8 * 1) & 0xff);
+        const b: u8 = @intCast((hex >> 8 * 0) & 0xff);
+        return .{ .RGB = .{ .r = r, .g = g, .b = b } };
+    }
+
+    pub fn toAnsi4(a: u4) Colors {
+        return .{ .Ansi4 = a };
+    }
+
+    pub fn toAnsi8(a: u8) Colors {
+        return .{ .Ansi8 = a };
+    }
+
+    /// Converts a 24-bit integer to a terminal color.
+    ///
+    /// - If the value is in the range `0–15`, it is treated as a 4-bit ANSI color (`Ansi4`).
+    /// - If the value is in the range `16–255`, it is treated as an 8-bit extended ANSI color (`Ansi8`).
+    /// - If the value is `256` or greater, it is interpreted as a 24-bit RGB color in `0xRRGGBB` format.
+    ///
+    /// This is a convenient helper when decoding color values from packed integers.
+    pub fn toColor(c: u24) Colors {
+        if (c < 16) {
+            return .{ .Ansi4 = @intCast(c) };
+        } else if (c < 256) {
+            return .{ .Ansi8 = @intCast(c) };
+        } else return Colors.hexToRGB(c);
     }
 };
 
@@ -150,7 +210,7 @@ pub const Zcolor = struct {
         if (style.bgColor) |color| {
             switch (color) {
                 .RGB => |c| try writer.print("48;2;{d};{d};{d}", .{ c.r, c.g, c.b }),
-                .Plate => |p| try writer.print("48;5;{d}", .{p}),
+                .Ansi4, .Ansi8 => |p| try writer.print("48;5;{d}", .{p}),
             }
         }
         if (writer.context.getLast() != ';') {
@@ -159,7 +219,7 @@ pub const Zcolor = struct {
         if (style.fgColor) |color| {
             switch (color) {
                 .RGB => |c| try writer.print("38;2;{d};{d};{d}", .{ c.r, c.g, c.b }),
-                .Plate => |p| try writer.print("38;5;{d}", .{p}),
+                .Ansi4, .Ansi8 => |p| try writer.print("38;5;{d}", .{p}),
             }
         }
         try writer.writeAll("m");
@@ -197,11 +257,13 @@ pub const Zcolor = struct {
         defer self.alloc.free(print_text);
         std.debug.print("{s}\n", .{print_text});
     }
+
     pub fn fmtPrint(self: Self, comptime text: []const u8, args: anytype, style: Style) !void {
         const print_text = try self.fmtRender(text, args, style);
         defer self.alloc.free(print_text);
         std.debug.print("{s}", .{print_text});
     }
+
     pub fn print(self: Self, text: []const u8, style: Style) !void {
         const print_text = try self.render(text, style);
         defer self.alloc.free(print_text);

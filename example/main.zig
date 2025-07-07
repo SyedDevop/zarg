@@ -130,6 +130,25 @@ pub fn main() !void {
         try cli.printParseError(err);
         return;
     };
+    const color = Color.Zcolor.init(allocator);
+
+    const header = try color.render("The Answer is: \n", .{
+        .fontStyle = .{
+            .doublyUnderline = true,
+            .italic = true,
+        },
+        .fgColor = Color.Colors.toColor(20),
+    });
+    defer allocator.free(header);
+
+    const body = try color.fmtRender("{d}", .{56_00}, .{
+        .fontStyle = .{ .bold = true, .crossedout = true },
+        .padding = .inLine(50, 0),
+        .fgColor = .toColor(50),
+    });
+    defer allocator.free(body);
+
+    std.debug.print("{s}{s}\n", .{ header, body });
 
     std.debug.print("The Command is     |{?s}|\n", .{@tagName(cli.running_cmd.name)});
     std.debug.print("The Input is       |{?s}|\n", .{cli.pos_args});

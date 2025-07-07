@@ -1,4 +1,4 @@
-//!  Clear screen.
+//! Clear screen.
 //! Note: Clear doesn't move the cursor, so the cursor will stay at the same position,
 //! to move cursor check `Cursor`.
 
