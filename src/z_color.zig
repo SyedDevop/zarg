@@ -170,6 +170,64 @@ pub const Style = struct {
     fgColor: ?Color = null,
     padding: Padding = .{},
     controlCode: ControlCode = .{},
+
+    const Self = @This();
+
+    fn prepare(self: *const Self, writer: anytype) !void {
+        try writer.writeAll(csi);
+        if (!self.controlCode.isDefault()) {
+            inline for (std.meta.fields(@TypeOf(self.controlCode))) |field| {
+                if (@field(self.controlCode, field.name)) {
+                    const code = control_codes.get(field.name).?;
+                    try writer.writeAll(code);
+                }
+            }
+        }
+
+        if (!self.fontStyle.isDefault()) {
+            inline for (std.meta.fields(@TypeOf(self.fontStyle))) |field| {
+                if (@field(self.fontStyle, field.name)) {
+                    const code = font_style_codes.get(field.name).?;
+                    try writer.writeAll(code);
+                    try writer.writeAll(";");
+                }
+            }
+        }
+
+        if (self.bgColor) |color| {
+            switch (color) {
+                .RGB => |c| try writer.print("48;2;{d};{d};{d}", .{ c.r, c.g, c.b }),
+                .Ansi4, .Ansi8 => |p| try writer.print("48;5;{d}", .{p}),
+            }
+        }
+
+        if (writer.context.getLast() != ';') {
+            try writer.writeAll(";");
+        }
+
+        if (self.fgColor) |color| {
+            switch (color) {
+                .RGB => |c| try writer.print("38;2;{d};{d};{d}", .{ c.r, c.g, c.b }),
+                .Ansi4, .Ansi8 => |p| try writer.print("38;5;{d}", .{p}),
+            }
+        }
+
+        try writer.writeAll("m");
+    }
+
+    pub fn render(self: *const Self, text: []const u8, writer: anytype) !void {
+        if (self.padding.up > 0) try writer.print("\x1B[{d}B", .{self.padding.up});
+
+        if (self.padding.left > 0) try writer.print("\x1B[{d}C", .{self.padding.left});
+
+        try self.prepare(writer);
+        try writer.writeAll(text);
+        try writer.writeAll(reset);
+
+        if (self.padding.down > 0) try writer.print("\x1B[{d}B", .{self.padding.down});
+
+        if (self.padding.right > 0) try writer.print("\x1B[{d}C", .{self.padding.right});
+    }
 };
 
 const esc = "\x1B";
@@ -188,68 +246,14 @@ pub const Zcolor = struct {
             .alloc = alloc,
         };
     }
-    fn prepare(writer: anytype, style: Style) !void {
-        try writer.writeAll(csi);
-        if (!style.controlCode.isDefault()) {
-            inline for (std.meta.fields(@TypeOf(style.controlCode))) |field| {
-                if (@field(style.controlCode, field.name)) {
-                    const code = control_codes.get(field.name).?;
-                    try writer.writeAll(code);
-                }
-            }
-        }
-        if (!style.fontStyle.isDefault()) {
-            inline for (std.meta.fields(@TypeOf(style.fontStyle))) |field| {
-                if (@field(style.fontStyle, field.name)) {
-                    const code = font_style_codes.get(field.name).?;
-                    try writer.writeAll(code);
-                    try writer.writeAll(";");
-                }
-            }
-        }
-        if (style.bgColor) |color| {
-            switch (color) {
-                .RGB => |c| try writer.print("48;2;{d};{d};{d}", .{ c.r, c.g, c.b }),
-                .Ansi4, .Ansi8 => |p| try writer.print("48;5;{d}", .{p}),
-            }
-        }
-        if (writer.context.getLast() != ';') {
-            try writer.writeAll(";");
-        }
-        if (style.fgColor) |color| {
-            switch (color) {
-                .RGB => |c| try writer.print("38;2;{d};{d};{d}", .{ c.r, c.g, c.b }),
-                .Ansi4, .Ansi8 => |p| try writer.print("38;5;{d}", .{p}),
-            }
-        }
-        try writer.writeAll("m");
-    }
-    pub fn render(self: Self, text: []const u8, style: Style) ![]u8 {
-        var code = std.ArrayList(u8).init(self.alloc);
-        var writer = code.writer();
-        if (style.padding.up > 0) {
-            try writer.print("\x1B[{d}B", .{style.padding.up});
-        }
-        if (style.padding.left > 0) {
-            try writer.print("\x1B[{d}C", .{style.padding.left});
-        }
-        try prepare(writer, style);
-        try code.appendSlice(text);
-        try code.appendSlice(reset);
-        if (style.padding.down > 0) {
-            try writer.print("\x1B[{d}B", .{style.padding.down});
-        }
-        if (style.padding.right > 0) {
-            try writer.print("\x1B[{d}C", .{style.padding.right});
-        }
-        return code.toOwnedSlice();
-    }
 
     pub fn fmtRender(self: Self, comptime text: []const u8, args: anytype, style: Style) ![]u8 {
-        const fmt = try std.fmt.allocPrint(self.alloc, text, args);
-        defer self.alloc.free(fmt);
-        const print_text = try self.render(fmt, style);
-        return print_text;
+        const fmt_text = try std.fmt.allocPrint(self.alloc, text, args);
+        defer self.alloc.free(fmt_text);
+
+        var print_text = std.ArrayList(u8).init(self.alloc);
+        try style.render(fmt_text, print_text.writer());
+        return print_text.toOwnedSlice();
     }
 
     pub fn fmtPrintln(self: Self, comptime text: []const u8, args: anytype, style: Style) !void {
@@ -265,8 +269,9 @@ pub const Zcolor = struct {
     }
 
     pub fn print(self: Self, text: []const u8, style: Style) !void {
-        const print_text = try self.render(text, style);
-        defer self.alloc.free(print_text);
-        std.debug.print("{s}", .{print_text});
+        var print_text = std.ArrayList(u8).init(self.alloc);
+        try style.render(text, print_text.writer());
+        defer print_text.deinit();
+        std.debug.print("{s}", .{print_text.items});
     }
 };

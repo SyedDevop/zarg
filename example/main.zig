@@ -2,7 +2,7 @@ const std = @import("std");
 const zarg = @import("zarg");
 
 const Cli = zarg.cli;
-const Color = zarg.color;
+const Color = zarg.ZColor;
 
 const USAGE =
     \\Example to use zarg
@@ -131,15 +131,25 @@ pub fn main() !void {
         return;
     };
     const color = Color.Zcolor.init(allocator);
+    var text = std.ArrayList(u8).init(allocator);
+    defer text.deinit();
+    var text_w = text.writer();
 
-    const header = try color.render("The Answer is: \n", .{
+    var header_style = Color.Style{
         .fontStyle = .{
             .doublyUnderline = true,
             .italic = true,
         },
-        .fgColor = Color.Colors.toColor(20),
-    });
-    defer allocator.free(header);
+        .fgColor = .toColor(245),
+    };
+
+    try header_style.render("The Question is:\n", &text_w);
+    header_style.fontStyle.bold = true;
+    header_style.fontStyle.doublyUnderline = false;
+    header_style.fontStyle.italic = false;
+
+    try header_style.render("The Answer is:\n", &text_w);
+    std.debug.print("{s}\n", .{text.items});
 
     const body = try color.fmtRender("{d}", .{56_00}, .{
         .fontStyle = .{ .bold = true, .crossedout = true },
@@ -148,7 +158,7 @@ pub fn main() !void {
     });
     defer allocator.free(body);
 
-    std.debug.print("{s}{s}\n", .{ header, body });
+    std.debug.print("{s}\n", .{body});
 
     std.debug.print("The Command is     |{?s}|\n", .{@tagName(cli.running_cmd.name)});
     std.debug.print("The Input is       |{?s}|\n", .{cli.pos_args});
