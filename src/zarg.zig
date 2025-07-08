@@ -1,5 +1,5 @@
 const std = @import("std");
-pub const color = @import("color.zig");
+pub const ZColor = @import("z_color.zig");
 pub const cli = @import("cmd.zig");
 pub const term = @import("term/term.zig");
 pub const clear = @import("term/clear.zig");

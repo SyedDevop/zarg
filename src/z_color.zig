@@ -93,25 +93,25 @@ pub const Padding = struct {
     }
 };
 
-pub const Black = Colors{ .Ansi4 = 0 };
-pub const Red = Colors{ .Ansi4 = 1 };
-pub const Green = Colors{ .Ansi4 = 2 };
-pub const Yellow = Colors{ .Ansi4 = 3 };
-pub const Blue = Colors{ .Ansi4 = 4 };
-pub const Magenta = Colors{ .Ansi4 = 5 };
-pub const Cyan = Colors{ .Ansi4 = 6 };
-pub const White = Colors{ .Ansi4 = 7 };
+pub const Black = Color{ .Ansi4 = 0 };
+pub const Red = Color{ .Ansi4 = 1 };
+pub const Green = Color{ .Ansi4 = 2 };
+pub const Yellow = Color{ .Ansi4 = 3 };
+pub const Blue = Color{ .Ansi4 = 4 };
+pub const Magenta = Color{ .Ansi4 = 5 };
+pub const Cyan = Color{ .Ansi4 = 6 };
+pub const White = Color{ .Ansi4 = 7 };
 
-pub const BrightBlack = Colors{ .Ansi4 = 8 };
-pub const BrightRed = Colors{ .Ansi4 = 9 };
-pub const BrightGreen = Colors{ .Ansi4 = 10 };
-pub const BrightYellow = Colors{ .Ansi4 = 11 };
-pub const BrightBlue = Colors{ .Ansi4 = 12 };
-pub const BrightMagenta = Colors{ .Ansi4 = 13 };
-pub const BrightCyan = Colors{ .Ansi4 = 14 };
-pub const BrightWhite = Colors{ .Ansi4 = 15 };
+pub const BrightBlack = Color{ .Ansi4 = 8 };
+pub const BrightRed = Color{ .Ansi4 = 9 };
+pub const BrightGreen = Color{ .Ansi4 = 10 };
+pub const BrightYellow = Color{ .Ansi4 = 11 };
+pub const BrightBlue = Color{ .Ansi4 = 12 };
+pub const BrightMagenta = Color{ .Ansi4 = 13 };
+pub const BrightCyan = Color{ .Ansi4 = 14 };
+pub const BrightWhite = Color{ .Ansi4 = 15 };
 
-pub const Colors = union(enum) {
+pub const Color = union(enum) {
     /// 4-bit ANSI color (0–15).
     /// Includes both standard (0–7) and bright (8–15) ANSI colors.
     Ansi4: u4,
@@ -129,22 +129,22 @@ pub const Colors = union(enum) {
         g: u8,
         b: u8,
     },
-    pub fn toRGB(r: u8, g: u8, b: u8) Colors {
+    pub fn toRGB(r: u8, g: u8, b: u8) Color {
         return .{ .RGB = .{ .r = r, .g = g, .b = b } };
     }
 
-    pub fn hexToRGB(hex: u24) Colors {
+    pub fn hexToRGB(hex: u24) Color {
         const r: u8 = @intCast((hex >> 8 * 2) & 0xff);
         const g: u8 = @intCast((hex >> 8 * 1) & 0xff);
         const b: u8 = @intCast((hex >> 8 * 0) & 0xff);
         return .{ .RGB = .{ .r = r, .g = g, .b = b } };
     }
 
-    pub fn toAnsi4(a: u4) Colors {
+    pub fn toAnsi4(a: u4) Color {
         return .{ .Ansi4 = a };
     }
 
-    pub fn toAnsi8(a: u8) Colors {
+    pub fn toAnsi8(a: u8) Color {
         return .{ .Ansi8 = a };
     }
 
@@ -155,19 +155,19 @@ pub const Colors = union(enum) {
     /// - If the value is `256` or greater, it is interpreted as a 24-bit RGB color in `0xRRGGBB` format.
     ///
     /// This is a convenient helper when decoding color values from packed integers.
-    pub fn toColor(c: u24) Colors {
+    pub fn toColor(c: u24) Color {
         if (c < 16) {
             return .{ .Ansi4 = @intCast(c) };
         } else if (c < 256) {
             return .{ .Ansi8 = @intCast(c) };
-        } else return Colors.hexToRGB(c);
+        } else return Color.hexToRGB(c);
     }
 };
 
 pub const Style = struct {
     fontStyle: FontStyle = .{},
-    bgColor: ?Colors = null,
-    fgColor: ?Colors = null,
+    bgColor: ?Color = null,
+    fgColor: ?Color = null,
     padding: Padding = .{},
     controlCode: ControlCode = .{},
 };
