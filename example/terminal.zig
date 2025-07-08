@@ -8,7 +8,7 @@ const USAGE =
     \\Example to use zarg terminal
     \\------------------
 ;
-const CmdType = zarg.Cmd(UserCmd);
+const CmdType = Cli.Cmd(UserCmd);
 const cli_cmds = [_]CmdType{
     CmdType{
         .name = .root,
@@ -27,7 +27,7 @@ const cli_cmds = [_]CmdType{
 
 pub const UserCmd = enum { root };
 
-fn printVersion(version_call: zarg.VersionCallFrom) []const u8 {
+fn printVersion(version_call: Cli.VersionCallFrom) []const u8 {
     return switch (version_call) {
         .version => "Z Terminal V1.0.0",
         .help => "V1.0.0",
@@ -39,7 +39,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
     defer _ = gpa.deinit();
 
-    var cli = try Cli.Cli(UserCmd)
+    var cli = try Cli.CliInit(UserCmd)
         .init(allocator, "Z Terminal", USAGE, .{ .fun = &printVersion }, &cli_cmds);
     defer cli.deinit();
 
@@ -47,7 +47,8 @@ pub fn main() !void {
         try cli.printParseError(err);
         return;
     };
-    const terminal = zarg.term
+    const terminal = zarg.Term;
+    _ = terminal;
     const color = ZColor.Zcolor.init(allocator);
     _ = color;
 }

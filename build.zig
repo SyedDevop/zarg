@@ -47,7 +47,7 @@ pub fn build(b: *std.Build) void {
     const simple = b.addExecutable(.{
         .name = "simple",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("example/main.zig"),
+            .root_source_file = b.path("example/simple.zig"),
             .target = target,
             .optimize = optimize,
         }),
@@ -62,4 +62,24 @@ pub fn build(b: *std.Build) void {
 
     const runStep = b.step("run", "Run the simple example app");
     runStep.dependOn(&runSimple.step);
+
+    const ter = b.addExecutable(.{
+        .name = "terminal",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("example/terminal.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+
+    ter.root_module.addImport("zarg", zargPkg);
+    b.installArtifact(ter);
+
+    // Define run step for the example
+    const runTerminal = b.addRunArtifact(ter);
+    runTerminal.step.dependOn(b.getInstallStep());
+    if (b.args) |args| runTerminal.addArgs(args);
+
+    const runStepT = b.step("runt", "Run the terminal example app");
+    runStepT.dependOn(&runTerminal.step);
 }

@@ -110,7 +110,7 @@ pub const CliParseError = error{
     MinPosArg,
     NumberStringGroupedFlagInLast,
 };
-pub fn Cli(comptime CmdEnum: type) type {
+pub fn CliInit(comptime CmdEnum: type) type {
     comptime {
         if (@typeInfo(CmdEnum) != .@"enum") {
             @compileError("CmdEnum must be an enum type; Found  " ++ @typeName(CmdEnum));

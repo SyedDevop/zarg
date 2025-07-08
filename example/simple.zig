@@ -122,8 +122,8 @@ pub fn main() !void {
     const allocator = gpa.allocator();
     defer _ = gpa.deinit();
 
-    var cli = try Cli.Cli(UserCmd)
-        .init(allocator, "Z Math", USAGE, .{ .fun = &printVersion }, &xmd);
+    var cli = try Cli.CliInit(UserCmd)
+        .init(allocator, "Z Sim", USAGE, .{ .fun = &printVersion }, &xmd);
     defer cli.deinit();
 
     cli.parse() catch |err| {
