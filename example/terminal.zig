@@ -1,7 +1,7 @@
 const std = @import("std");
 const zarg = @import("zarg");
 
-const Cli = zarg.cli;
+const Cli = zarg.Cli;
 const ZColor = zarg.ZColor;
 
 const USAGE =
@@ -39,7 +39,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
     defer _ = gpa.deinit();
 
-    var cli = try zarg.Cli(UserCmd)
+    var cli = try Cli.Cli(UserCmd)
         .init(allocator, "Z Terminal", USAGE, .{ .fun = &printVersion }, &cli_cmds);
     defer cli.deinit();
 
@@ -47,6 +47,7 @@ pub fn main() !void {
         try cli.printParseError(err);
         return;
     };
+    const terminal = zarg.term
     const color = ZColor.Zcolor.init(allocator);
     _ = color;
 }

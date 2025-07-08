@@ -1,14 +1,14 @@
 const std = @import("std");
 const zarg = @import("zarg");
 
-const Cli = zarg.cli;
+const Cli = zarg.Cli;
 const Color = zarg.ZColor;
 
 const USAGE =
     \\Example to use zarg
     \\------------------
 ;
-const CmdType = zarg.Cmd(UserCmd);
+const CmdType = Cli.Cmd(UserCmd);
 
 const xmd = [_]CmdType{
     CmdType{
@@ -110,7 +110,7 @@ pub const UserCmd = enum {
     list,
 };
 
-fn printVersion(version_call: zarg.VersionCallFrom) []const u8 {
+fn printVersion(version_call: Cli.VersionCallFrom) []const u8 {
     return switch (version_call) {
         .version => "Game  on \n V1000",
         .help => "V 1.0.0.0",
@@ -122,7 +122,7 @@ pub fn main() !void {
     const allocator = gpa.allocator();
     defer _ = gpa.deinit();
 
-    var cli = try zarg.Cli(UserCmd)
+    var cli = try Cli.Cli(UserCmd)
         .init(allocator, "Z Math", USAGE, .{ .fun = &printVersion }, &xmd);
     defer cli.deinit();
 
