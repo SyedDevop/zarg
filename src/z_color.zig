@@ -222,11 +222,19 @@ pub const Style = struct {
 
         try self.prepare(writer);
         try writer.writeAll(text);
-        try writer.writeAll(reset);
+        try writer.writeAll(reset_code);
 
         if (self.padding.down > 0) try writer.print("\x1B[{d}B", .{self.padding.down});
 
         if (self.padding.right > 0) try writer.print("\x1B[{d}C", .{self.padding.right});
+    }
+
+    pub fn reset(self: *Self) void {
+        self.fontStyle = .{};
+        self.controlCode = .{};
+        self.bgColor = null;
+        self.fgColor = null;
+        self.padding = .{};
     }
 };
 
@@ -234,7 +242,7 @@ const esc = "\x1B";
 const line_feed = "\x0A";
 const csi = esc ++ "[";
 
-const reset = csi ++ "0m";
+const reset_code = csi ++ "0m";
 
 pub const Zcolor = struct {
     alloc: Allocator,
