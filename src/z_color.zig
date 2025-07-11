@@ -220,7 +220,7 @@ pub const Style = struct {
 
         try self.prepare(writer);
         try writer.writeAll(text);
-        try writer.writeAll(reset);
+        try writer.writeAll(reset_code);
 
         try self.padDownAndRight(writer);
     }
@@ -250,7 +250,7 @@ const esc = "\x1B";
 const line_feed = "\x0A";
 const csi = esc ++ "[";
 
-const reset = csi ++ "0m";
+const reset_code = csi ++ "0m";
 
 pub const Zcolor = struct {
     alloc: Allocator,
