@@ -174,6 +174,7 @@ pub const Style = struct {
     const Self = @This();
 
     fn prepare(self: *const Self, writer: anytype) !void {
+        var ansi_code_closed: bool = false;
         try writer.writeAll(csi);
         if (!self.controlCode.isDefault()) {
             inline for (std.meta.fields(@TypeOf(self.controlCode))) |field| {
@@ -190,6 +191,7 @@ pub const Style = struct {
                     const code = font_style_codes.get(field.name).?;
                     try writer.writeAll(code);
                     try writer.writeAll(";");
+                    ansi_code_closed = true;
                 }
             }
         }
@@ -201,7 +203,7 @@ pub const Style = struct {
             }
         }
 
-        if (writer.context.getLast() != ';') {
+        if (!ansi_code_closed) {
             try writer.writeAll(";");
         }
 
