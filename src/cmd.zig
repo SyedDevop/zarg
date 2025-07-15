@@ -31,7 +31,10 @@ pub const ArgValue = union(enum) {
     }
 };
 
+/// Indicates the context in which the version string is being requested,
+/// such as for a `--version` or `--help` display.
 pub const VersionCallFrom = enum { version, help };
+
 const VersionType = union(enum) {
     str: []const u8,
     fun: *const fn (_: VersionCallFrom) []const u8,
@@ -209,11 +212,10 @@ pub fn Cli(comptime CmdEnum: type) type {
                 CliParseError.MinPosArg => try std.fmt.allocPrint(self.alloc, "The command '{s}' requires at least {d} positional argument(s).", .{ @tagName(self.running_cmd.name), self.running_cmd.min_pos_arg }),
 
                 CliParseError.ShowVersion => {
-                    const version = switch (self.version) {
-                        .str => |v| v,
-                        .fun => |f| f(.version),
-                    };
-                    std.debug.print("{s} {s}", .{ self.name, version });
+                    switch (self.version) {
+                        .str => |v| std.debug.print("{s} {s}", .{ self.name, v }),
+                        .fun => |f| std.debug.print("{s}", .{f(.version)}),
+                    }
                     return null;
                 },
                 CliParseError.ShowHelp => {
