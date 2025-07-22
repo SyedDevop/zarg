@@ -7,16 +7,16 @@ const winK = win.kernel32;
 
 /// Represents the size of a terminal in both character dimensions and pixel dimensions.
 pub const TermSize = struct {
-    /// Terminal col as measured number of characters that fit into a terminal horizontally
-    col: u16,
     /// terminal row as measured number of characters that fit into terminal vertically
     row: u16,
+    /// Terminal col as measured number of characters that fit into a terminal horizontally
+    col: u16,
 
     /// Terminal width, measured in pixels null in win.
-    Xpixel: ?u16 = null,
+    Xpixel: u16,
 
     /// Terminal height, measured in pixels.
-    Ypixel: ?u16 = null,
+    Ypixel: u16,
 };
 const WindowsConsoleMode = struct {
     stdin: u32,
@@ -121,20 +121,10 @@ pub fn getSize(file: std.fs.File) !?TermSize {
             };
         },
         .linux, .macos => blk: {
-            var buf: posix.system.winsize = undefined;
-            break :blk switch (std.posix.errno(
-                std.posix.system.ioctl(
-                    file.handle,
-                    std.posix.T.IOCGWINSZ,
-                    @intFromPtr(&buf),
-                ),
-            )) {
-                .SUCCESS => TermSize{
-                    .col = buf.ws_col,
-                    .row = buf.ws_row,
-                    .Xpixel = buf.ws_xpixel,
-                    .Ypixel = buf.ws_ypixel,
-                },
+            var buf: TermSize = undefined;
+            const call = std.posix.system.ioctl(file.handle, posix.T.IOCGWINSZ, @intFromPtr(&buf));
+            break :blk switch (posix.errno(call)) {
+                .SUCCESS => buf,
                 else => error.IoctlError,
             };
         },
