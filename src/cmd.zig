@@ -299,7 +299,7 @@ pub fn Cli(comptime CmdEnum: type) type {
                 //TODO: Maybe this for loop can be a hash map.
                 for (opts) |opt| {
                     if (std.mem.eql(u8, opt.long, kv_arg.key)) {
-                        if (kv_arg.value == null) {
+                        if (kv_arg.value == null and opt.value != .bool) {
                             self.err_msg = try std.fmt.bufPrint(&self.err_msg_buf, "{s}", .{kv_arg.key});
                             return CliParseError.ValueRequired;
                         }
@@ -307,10 +307,12 @@ pub fn Cli(comptime CmdEnum: type) type {
                         var copy_opt = opt;
                         switch (opt.value) {
                             .bool => {
-                                const lower_value = try self.alloc.dupe(u8, kv_arg.value.?);
-                                defer self.alloc.free(lower_value);
-                                _ = std.ascii.lowerString(lower_value, lower_value);
-                                copy_opt.value = .{ .bool = std.mem.eql(u8, lower_value, "true") };
+                                copy_opt.value = if (kv_arg.value) |v| brk: {
+                                    const lower_value = try self.alloc.dupe(u8, v);
+                                    defer self.alloc.free(lower_value);
+                                    _ = std.ascii.lowerString(lower_value, lower_value);
+                                    break :brk .{ .bool = std.mem.eql(u8, lower_value, "true") };
+                                } else .{ .bool = true };
                                 try self.computed_args.append(copy_opt);
                             },
                             .str => {
