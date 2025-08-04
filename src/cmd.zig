@@ -379,7 +379,7 @@ pub fn Cli(comptime CmdEnum: type) type {
                                             copy_opt.value = .{ .num = num };
                                             try self.computed_args.append(copy_opt);
                                         },
-                                        .list => @panic("TODO: List Not implemented"),
+                                        .list => util.logLocMessage("TODO: List Not implemented", @src()),
                                         .bool => unreachable,
                                     }
                                 },
