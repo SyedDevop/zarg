@@ -42,7 +42,7 @@ pub const RawTerm = struct {
     orig_termios: std.posix.termios,
 
     /// The OS-specific file descriptor or file handle.
-    handle: os.linux.fd_t,
+    handle: posix.fd_t,
 
     const Self = @This();
 
@@ -61,7 +61,7 @@ pub fn isTerminal(file: std.fs.File) bool {
 /// mode and returns the previous state of the terminal so that it can be
 /// restored.
 pub fn rawModePosix(fd: posix.fd_t) !RawTerm {
-    const original_termios = try std.posix.tcgetattr(fd);
+    const original_termios = try posix.tcgetattr(posix.STDIN_FILENO);
     var raw = original_termios;
 
     raw.iflag.IGNBRK = false;
@@ -72,7 +72,6 @@ pub fn rawModePosix(fd: posix.fd_t) !RawTerm {
     raw.iflag.IGNCR = false;
     raw.iflag.ICRNL = false;
     raw.iflag.IXON = false;
-
     raw.oflag.OPOST = false;
 
     raw.lflag.ECHO = false;
@@ -85,6 +84,7 @@ pub fn rawModePosix(fd: posix.fd_t) !RawTerm {
     raw.cc[@intFromEnum(posix.V.MIN)] = 1;
     raw.cc[@intFromEnum(posix.V.TIME)] = 0;
     try posix.tcsetattr(fd, .FLUSH, raw);
+
     return .{
         .orig_termios = original_termios,
         .handle = fd,
@@ -122,7 +122,7 @@ pub fn getSize(file: std.fs.File) !?TermSize {
         },
         .linux, .macos => blk: {
             var buf: TermSize = undefined;
-            const call = std.posix.system.ioctl(file.handle, posix.T.IOCGWINSZ, @intFromPtr(&buf));
+            const call = posix.system.ioctl(file.handle, posix.T.IOCGWINSZ, @intFromPtr(&buf));
             break :blk switch (posix.errno(call)) {
                 .SUCCESS => buf,
                 else => error.IoctlError,

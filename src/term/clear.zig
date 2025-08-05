@@ -40,6 +40,10 @@ pub fn all(writer: anytype) !void {
     return std.fmt.format(writer, utils.csi ++ utils.clear_all, .{});
 }
 
+pub fn all_move_curser_top(writer: anytype) !void {
+    try all(writer);
+    return std.fmt.format(writer, utils.csi ++ "H", .{});
+}
 /// Clear from cursor to end of line
 pub fn line_from_cursor(writer: anytype) !void {
     return std.fmt.format(writer, utils.csi ++ utils.clear_line_from_cursor, .{});

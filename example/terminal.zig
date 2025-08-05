@@ -35,6 +35,12 @@ fn printVersion(version_call: Cli.VersionCallFrom) []const u8 {
 }
 
 pub fn main() !void {
+    var stdout = std.io.getStdOut();
+    const sto_writer = stdout.writer();
+
+    var stdin = std.io.getStdIn();
+    // const sti_writer = stdin.writer();
+
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
     defer _ = gpa.deinit();
@@ -48,7 +54,28 @@ pub fn main() !void {
         return;
     };
     const terminal = zarg.Term;
-    _ = terminal;
+    var raw = try terminal.rawModePosix(std.io.getStdOut().handle);
+    defer {
+        raw.disableRawMode() catch {};
+    }
+    const clear = zarg.Clear;
+    try clear.all_move_curser_top(sto_writer);
     const color = ZColor.Zcolor.init(allocator);
     _ = color;
+    try stdout.writeAll("Press Q or Ctr+q to quit \r\n");
+    try sto_writer.print("{?any}", .{try terminal.getSize(std.io.getStdOut())});
+
+    while (true) {
+        var buf: [1]u8 = undefined;
+        const bytes_read = stdin.read(&buf) catch |err| {
+            try sto_writer.print("\nError Getting the input: {s}\n", .{@errorName(err)});
+            return err;
+        };
+        if (bytes_read == 0) continue;
+        try sto_writer.print("Read {s}-{x}-{d} bytes \r\n", .{ buf, buf, buf });
+        if (buf[0] == 'q' or buf[0] == 'Q' or buf[0] == 0x11) { // Q key
+            try sto_writer.print("\nBye!\n", .{});
+            return;
+        }
+    }
 }
