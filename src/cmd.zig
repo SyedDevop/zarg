@@ -29,6 +29,15 @@ pub const ArgValue = union(enum) {
             else => {},
         }
     }
+
+    pub fn isNull(self: ArgValue) bool {
+        return switch (self) {
+            .str => |str| return str == null,
+            .bool => |b| return b == null,
+            .num => |n| return n == null,
+            .list => |l| return l == null,
+        };
+    }
 };
 
 /// Indicates the context in which the version string is being requested,
@@ -299,7 +308,7 @@ pub fn Cli(comptime CmdEnum: type) type {
                 //TODO: Maybe this for loop can be a hash map.
                 for (opts) |opt| {
                     if (std.mem.eql(u8, opt.long, kv_arg.key)) {
-                        if (kv_arg.value == null and opt.value != .bool) {
+                        if (kv_arg.value == null and opt.value != .bool and opt.value.isNull()) {
                             self.err_msg = try std.fmt.bufPrint(&self.err_msg_buf, "{s}", .{kv_arg.key});
                             return CliParseError.ValueRequired;
                         }
@@ -317,11 +326,11 @@ pub fn Cli(comptime CmdEnum: type) type {
                             },
                             .str => {
                                 copy_opt.is_alloc = true;
-                                copy_opt.value = .{ .str = try self.alloc.dupe(u8, kv_arg.value.?) };
+                                copy_opt.value = .{ .str = try self.alloc.dupe(u8, kv_arg.value orelse opt.value.str.?) };
                                 try self.computed_args.append(copy_opt);
                             },
                             .num => {
-                                const num = std.fmt.parseInt(i32, kv_arg.value.?, 10) catch |e| switch (e) {
+                                const num = std.fmt.parseInt(i32, kv_arg.value orelse opt.value.num.?, 10) catch |e| switch (e) {
                                     error.InvalidCharacter => null,
                                     else => return e,
                                 };
