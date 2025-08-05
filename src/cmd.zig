@@ -330,10 +330,10 @@ pub fn Cli(comptime CmdEnum: type) type {
                                 try self.computed_args.append(copy_opt);
                             },
                             .num => {
-                                const num = std.fmt.parseInt(i32, kv_arg.value orelse opt.value.num.?, 10) catch |e| switch (e) {
+                                const num = if (kv_arg.value) |v| std.fmt.parseInt(i32, v, 10) catch |e| switch (e) {
                                     error.InvalidCharacter => null,
                                     else => return e,
-                                };
+                                } else opt.value.num.?;
                                 copy_opt.value = .{ .num = num };
                                 try self.computed_args.append(copy_opt);
                             },
@@ -371,7 +371,7 @@ pub fn Cli(comptime CmdEnum: type) type {
 
                                     const kv_arg = try parseKVArg(args.items);
                                     // try kv_arg.print();
-                                    if (kv_arg.value == null) {
+                                    if (kv_arg.value == null and opt.value.isNull()) {
                                         self.err_msg = std.fmt.bufPrint(&self.err_msg_buf, "{s}", .{kv_arg.key}) catch unreachable;
                                         return CliParseError.ValueRequired;
                                     }
@@ -379,14 +379,14 @@ pub fn Cli(comptime CmdEnum: type) type {
                                     switch (opt.value) {
                                         .str => {
                                             copy_opt.is_alloc = true;
-                                            copy_opt.value = .{ .str = try self.alloc.dupe(u8, kv_arg.value.?) };
+                                            copy_opt.value = .{ .str = try self.alloc.dupe(u8, kv_arg.value orelse opt.value.str.?) };
                                             try self.computed_args.append(copy_opt);
                                         },
                                         .num => {
-                                            const num = std.fmt.parseInt(i32, kv_arg.value.?, 10) catch |e| switch (e) {
+                                            const num = if (kv_arg.value) |v| std.fmt.parseInt(i32, v, 10) catch |e| switch (e) {
                                                 error.InvalidCharacter => null,
                                                 else => return e,
-                                            };
+                                            } else opt.value.num.?;
                                             copy_opt.value = .{ .num = num };
                                             try self.computed_args.append(copy_opt);
                                         },
