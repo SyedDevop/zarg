@@ -174,7 +174,7 @@ pub fn main() !void {
             } else if (cli.getPosArg(0)) |pos| {
                 std.debug.print("This is lit {s}\n", .{pos});
             }
-            for (cli.computed_args.items) |v| {
+            for (cli.computed_args.data.items) |v| {
                 switch (v.value) {
                     .str => |s| std.debug.print("<str > Computed args V:{?s} L:{s} S:{s} \n", .{ s, v.long, v.short }),
                     .bool => |bo| std.debug.print("<bool> Computed args V:{?}  L:{s} S:{s} \n", .{ bo, v.long, v.short }),

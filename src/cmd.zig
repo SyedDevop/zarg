@@ -113,6 +113,60 @@ pub fn Cmd(comptime CmdEnum: type) type {
     };
 }
 
+pub const ComputedArgs = struct {
+    const Self = @This();
+    data: ArgsList,
+    alloc: Allocator,
+
+    pub fn getStrArg(self: Self, arg_name: []const u8) !?[]const u8 {
+        for (self.data.items) |arg| {
+            if (std.mem.eql(u8, arg.long, arg_name) or std.mem.eql(u8, arg.short, arg_name)) {
+                if (arg.value != .str) {
+                    return error.ArgIsNotStr;
+                }
+                return arg.value.str;
+            }
+        }
+        return null;
+    }
+
+    pub fn getNumArg(self: Self, arg_name: []const u8) !?i32 {
+        for (self.data.items) |arg| {
+            if (std.mem.eql(u8, arg.long, arg_name) or std.mem.eql(u8, arg.short, arg_name)) {
+                if (arg.value != .num) {
+                    return error.ArgIsNotNum;
+                }
+                return arg.value.num;
+            }
+        }
+        return null;
+    }
+
+    pub fn getBoolArg(self: Self, arg_name: []const u8) !bool {
+        for (self.data.items) |arg| {
+            if (std.mem.eql(u8, arg.long, arg_name) or std.mem.eql(u8, arg.short, arg_name)) {
+                if (arg.value != .bool) {
+                    return error.ArgIsNotBool;
+                }
+                if (arg.value.bool) |val| {
+                    return val;
+                } else {
+                    return false;
+                }
+            }
+        }
+        return false;
+    }
+    pub fn append(self: *Self, arg: Arg) !void {
+        try self.data.append(arg);
+    }
+
+    pub fn deinit(self: Self) void {
+        for (self.data.items) |*item| if (item.is_alloc) try item.value.free(self.alloc);
+        self.data.deinit();
+    }
+};
+
 pub const CliParseError = error{
     InsufficientArguments,
     ShowHelp,
@@ -134,7 +188,7 @@ pub fn Cli(comptime CmdEnum: type) type {
 
         alloc: Allocator,
 
-        computed_args: ArgsList,
+        computed_args: ComputedArgs,
         cmds: []const CmdT,
         running_cmd: CmdT,
 
@@ -184,7 +238,7 @@ pub fn Cli(comptime CmdEnum: type) type {
                 .cmds = commands,
                 .running_cmd = commands[0],
                 .version = version,
-                .computed_args = ArgsList.init(allocate),
+                .computed_args = .{ .data = ArgsList.init(allocate), .alloc = allocate },
             };
         }
 
@@ -436,43 +490,15 @@ pub fn Cli(comptime CmdEnum: type) type {
         }
 
         pub fn getStrArg(self: Self, arg_name: []const u8) !?[]const u8 {
-            for (self.computed_args.items) |arg| {
-                if (std.mem.eql(u8, arg.long, arg_name) or std.mem.eql(u8, arg.short, arg_name)) {
-                    if (arg.value != .str) {
-                        return error.ArgIsNotStr;
-                    }
-                    return arg.value.str;
-                }
-            }
-            return null;
+            return self.computed_args.getStrArg(arg_name);
         }
 
         pub fn getNumArg(self: Self, arg_name: []const u8) !?i32 {
-            for (self.computed_args.items) |arg| {
-                if (std.mem.eql(u8, arg.long, arg_name) or std.mem.eql(u8, arg.short, arg_name)) {
-                    if (arg.value != .num) {
-                        return error.ArgIsNotNum;
-                    }
-                    return arg.value.num;
-                }
-            }
-            return null;
+            return self.computed_args.getNumArg(arg_name);
         }
 
         pub fn getBoolArg(self: Self, arg_name: []const u8) !bool {
-            for (self.computed_args.items) |arg| {
-                if (std.mem.eql(u8, arg.long, arg_name) or std.mem.eql(u8, arg.short, arg_name)) {
-                    if (arg.value != .bool) {
-                        return error.ArgIsNotBool;
-                    }
-                    if (arg.value.bool) |val| {
-                        return val;
-                    } else {
-                        return false;
-                    }
-                }
-            }
-            return false;
+            return self.computed_args.getBoolArg(arg_name);
         }
 
         pub fn help(self: Self) !void {
@@ -572,7 +598,6 @@ pub fn Cli(comptime CmdEnum: type) type {
         }
 
         pub fn deinit(self: *Self) void {
-            for (self.computed_args.items) |*item| if (item.is_alloc) try item.value.free(self.alloc);
             self.computed_args.deinit();
             self.deinitPosArgs();
             self.deinitRestArgs();
