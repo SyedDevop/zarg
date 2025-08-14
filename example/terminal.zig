@@ -67,19 +67,22 @@ pub fn main() !void {
     const terminal = zarg.Term;
     const mouse = terminal.MouseMode{ .normal = true };
 
-    var raw = try terminal.rawModePosix(std.io.getStdOut().handle);
+    var raw = try terminal.rawMode(stdout.handle);
     defer {
         raw.disableRawMode() catch {};
     }
+
     var fds = [1]std.posix.pollfd{
         .{ .fd = stdin.handle, .events = std.posix.POLL.IN, .revents = 0 },
     };
-    // const clear = zarg.Clear;
-    // try clear.all_move_curser_top(sto_writer);
+
+    const clear = zarg.Clear;
+    try clear.all_move_curser_top(sto_writer);
     const color = ZColor.Zcolor.init(allocator);
     _ = color;
     try stdout.writeAll("Press Q or Ctr+q to quit \r\n");
     try sto_writer.print("{?any}\n\r", .{try terminal.getSize(std.io.getStdOut())});
+
     try mouse.enableMouseEvent(sto_writer);
     defer mouse.disableMouseEvent(sto_writer) catch {};
 

@@ -4,6 +4,9 @@ const posix = std.posix;
 const os = std.os;
 const win = os.windows;
 const winK = win.kernel32;
+const winUtil = @import("win_util.zig");
+const WinInput = winUtil.Input;
+const WinOutput = winUtil.Output;
 
 /// Represents the size of a terminal in both character dimensions and pixel dimensions.
 pub const TermSize = struct {
@@ -18,36 +21,36 @@ pub const TermSize = struct {
     /// Terminal height, measured in pixels.
     Ypixel: u16,
 };
-const WindowsConsoleMode = struct {
-    stdin: u32,
-    stdout: u32,
-
-    const Input = enum(u32) {
-        enable_processed_input = 0x0001,
-        enable_line_input = 0x0002,
-        enable_echo_input = 0x0004,
-        enable_virtual_terminal_input = 0x0200,
-    };
-
-    const Output = enum(u32) {
-        enable_processed_output = 0x0001,
-        enable_wrap_at_eol_output = 0x0002,
-        enable_virtual_terminal_processing = 0x0004,
-        disable_newline_auto_return = 0x0008,
-    };
-};
 /// A raw terminal representation, you can enter terminal raw mode
 /// using this struct. Raw mode is essential to create a TUI.
 pub const RawTerm = struct {
-    orig_termios: std.posix.termios,
+    orig_termios: switch (builtin.os.tag) {
+        .windows => win.DWORD,
+        else => std.posix.termios,
+    },
 
     /// The OS-specific file descriptor or file handle.
-    handle: posix.fd_t,
+    handle: std.fs.File.Handle,
 
     const Self = @This();
 
     /// Returns to the previous terminal state
     pub fn disableRawMode(self: *Self) !void {
+        switch (builtin.os.tag) {
+            .windows => try self.disableRawModeWindows(),
+            else => try self.disableRawModePosix(),
+        }
+    }
+    fn disableRawModeWindows(self: *Self) !void {
+        return switch (winK.GetConsoleMode(self.handle, self.orig_termios)) {
+            win.TRUE => {},
+            win.FALSE => {
+                const err = winK.GetLastError();
+                return win.unexpectedError(err);
+            },
+        };
+    }
+    fn disableRawModePosix(self: *Self) !void {
         try posix.tcsetattr(self.handle, .FLUSH, self.orig_termios);
     }
 };
@@ -122,10 +125,17 @@ pub const MouseMode = packed struct {
         // }
     }
 };
+const Handel = std.fs.File.Handle;
+pub fn rawMode(handel: Handel) !RawTerm {
+    return switch (builtin.os.tag) {
+        .windows => try rawModeWin(handel),
+        else => try rawModePosix(handel),
+    };
+}
 /// rawModePosix puts the terminal connected to the given file descriptor into raw
 /// mode and returns the previous state of the terminal so that it can be
 /// restored.
-pub fn rawModePosix(fd: posix.fd_t) !RawTerm {
+fn rawModePosix(fd: Handel) !RawTerm {
     const original_termios = try posix.tcgetattr(posix.STDIN_FILENO);
     var raw = original_termios;
 
@@ -156,13 +166,16 @@ pub fn rawModePosix(fd: posix.fd_t) !RawTerm {
     };
 }
 
-pub fn rawModeWin(fd: posix.fd_t) !void {
+fn rawModeWin(fd: Handel) !RawTerm {
     if (0 == 0) return error.NotImplemented;
-    var mode_stdout: win.DWORD = 0;
-    switch (winK.GetConsoleMode(fd, &mode_stdout)) {
-        win.TRUE => {},
-        else => error.Unexpected,
-    }
+    const mode = try winUtil.getConsoleMode(fd);
+    var raw = mode & ~(WinInput.enable_echo_input | WinInput.enable_processed_input | WinInput.enable_line_input);
+    raw |= win.ENABLE_VIRTUAL_TERMINAL_INPUT;
+    try winUtil.setConsoleMode(fd, raw);
+    return .{
+        .orig_termios = mode,
+        .handle = fd,
+    };
 }
 
 /// getSize returns the visible dimensions of the given terminal.
