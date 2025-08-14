@@ -106,7 +106,7 @@ pub fn main() !void {
             '\x1b' => {
                 switch (builtin.os.tag) {
                     .windows => {
-                        switch (try winK.WaitForSingleObject(raw.handle, 30)) {
+                        switch ( winK.WaitForSingleObject(raw.handle, 30)) {
                             win.WAIT_OBJECT_0 => {
                                 std.debug.print("Esc\r\n", .{});
                                 continue;

@@ -42,12 +42,12 @@ pub const RawTerm = struct {
         }
     }
     fn disableRawModeWindows(self: *Self) !void {
-        return switch (winK.GetConsoleMode(self.handle, self.orig_termios)) {
-            win.TRUE => {},
+        return switch (winK.GetConsoleMode(self.handle, &self.orig_termios)) {
             win.FALSE => {
                 const err = winK.GetLastError();
                 return win.unexpectedError(err);
             },
+	    else => {},
         };
     }
     fn disableRawModePosix(self: *Self) !void {
@@ -167,7 +167,6 @@ fn rawModePosix(fd: Handel) !RawTerm {
 }
 
 fn rawModeWin(fd: Handel) !RawTerm {
-    if (0 == 0) return error.NotImplemented;
     const mode = try winUtil.getConsoleMode(fd);
     var raw = mode & ~(WinInput.enable_echo_input | WinInput.enable_processed_input | WinInput.enable_line_input);
     raw |= win.ENABLE_VIRTUAL_TERMINAL_INPUT;

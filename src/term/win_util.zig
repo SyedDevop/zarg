@@ -19,20 +19,20 @@ pub const Output = enum(u32) {
 
 pub fn getConsoleMode(handle: win.HANDLE) !win.DWORD {
     var mode: win.DWORD = undefined;
-    switch (winK.GetConsoleMode(handle, &mode)) {
-        win.TRUE => return mode,
+    return   switch (winK.GetConsoleMode(handle, &mode)) {
+	else  => return mode,
         win.FALSE => {
             const err = winK.GetLastError();
             return win.unexpectedError(err);
         },
-    }
+    };
 }
 pub fn setConsoleMode(handle: win.HANDLE, mode: win.DWORD) !void {
     switch (winK.SetConsoleMode(handle, &mode)) {
-        win.TRUE => {},
         win.FALSE => {
             const err = winK.GetLastError();
             return win.unexpectedError(err);
         },
+        else => {},
     }
 }
