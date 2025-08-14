@@ -3,24 +3,21 @@ const os = std.os;
 const win = os.windows;
 const winK = win.kernel32;
 
-pub const Input = enum(u32) {
-    enable_processed_input = 0x0001,
-    enable_line_input = 0x0002,
-    enable_echo_input = 0x0004,
-    enable_virtual_terminal_input = 0x0200,
-};
-
-pub const Output = enum(u32) {
-    enable_processed_output = 0x0001,
-    enable_wrap_at_eol_output = 0x0002,
-    enable_virtual_terminal_processing = 0x0004,
-    disable_newline_auto_return = 0x0008,
-};
+// input
+const ENABLE_PROCESSED_INPUT: u32 = 0x0001;
+const ENABLE_LINE_INPUT: u32 = 0x0002;
+const ENABLE_ECHO_INPUT: u32 = 0x0004;
+const ENABLE_VIRTUAL_TERMINAL_INPUT: u32 = 0x0200;
+// OutPUT
+const ENABLE_PROCESSED_OUTPUT: u32 = 0x0001;
+const ENABLE_WRAP_AT_EOL_OUTPUT: u32 = 0x0002;
+const ENABLE_VIRTUAL_TERMINAL_PROCESSING: u32 = 0x0004;
+const DISABLE_NEWLINE_AUTO_RETURN: u32 = 0x0008;
 
 pub fn getConsoleMode(handle: win.HANDLE) !win.DWORD {
     var mode: win.DWORD = undefined;
-    return   switch (winK.GetConsoleMode(handle, &mode)) {
-	else  => return mode,
+    return switch (winK.GetConsoleMode(handle, &mode)) {
+        else => return mode,
         win.FALSE => {
             const err = winK.GetLastError();
             return win.unexpectedError(err);

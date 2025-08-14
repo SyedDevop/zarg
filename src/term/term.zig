@@ -5,8 +5,6 @@ const os = std.os;
 const win = os.windows;
 const winK = win.kernel32;
 const winUtil = @import("win_util.zig");
-const WinInput = winUtil.Input;
-const WinOutput = winUtil.Output;
 
 /// Represents the size of a terminal in both character dimensions and pixel dimensions.
 pub const TermSize = struct {
@@ -47,7 +45,7 @@ pub const RawTerm = struct {
                 const err = winK.GetLastError();
                 return win.unexpectedError(err);
             },
-	    else => {},
+            else => {},
         };
     }
     fn disableRawModePosix(self: *Self) !void {
@@ -168,7 +166,7 @@ fn rawModePosix(fd: Handel) !RawTerm {
 
 fn rawModeWin(fd: Handel) !RawTerm {
     const mode = try winUtil.getConsoleMode(fd);
-    var raw = mode & ~(WinInput.enable_echo_input | WinInput.enable_processed_input | WinInput.enable_line_input);
+    var raw = mode & ~(winUtil.ENABLE_ECHO_INPUT | winUtil.ENABLE_PROCESSED_INPUT | winUtil.ENABLE_LINE_INPUT);
     raw |= win.ENABLE_VIRTUAL_TERMINAL_INPUT;
     try winUtil.setConsoleMode(fd, raw);
     return .{
