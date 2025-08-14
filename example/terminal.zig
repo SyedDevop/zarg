@@ -1,6 +1,10 @@
 const std = @import("std");
 const zarg = @import("zarg");
 
+const os = std.os;
+const win = os.windows;
+const winK = win.kernel32;
+const builtin = @import("builtin");
 const Cli = zarg.Cli;
 const ZColor = zarg.ZColor;
 
@@ -71,10 +75,13 @@ pub fn main() !void {
     defer {
         raw.disableRawMode() catch {};
     }
+    var fds: ?[1]std.posix.pollfd = null;
 
-    var fds = [1]std.posix.pollfd{
-        .{ .fd = stdin.handle, .events = std.posix.POLL.IN, .revents = 0 },
-    };
+    if (builtin.os.tag != .windows) {
+        fds = .{
+            .{ .fd = stdin.handle, .events = std.posix.POLL.IN, .revents = 0 },
+        };
+    }
 
     const clear = zarg.Clear;
     try clear.all_move_curser_top(sto_writer);
@@ -88,16 +95,31 @@ pub fn main() !void {
 
     // var index: usize = 0;
     while (true) {
-        const data = try std.posix.poll(&fds, 1);
-        if (data == 0) continue;
+        if (builtin.os.tag != .windows) {
+            const data = try std.posix.poll(&fds.?, 1);
+            if (data == 0) continue;
+        }
         const in_reader = stdin.reader();
         const c0 = try in_reader.readByte();
         printNibble(c0, 1);
         switch (c0) {
             '\x1b' => {
-                if ((try std.posix.poll(&fds, 30) <= 0)) {
-                    std.debug.print("Esc\r\n", .{});
-                    continue;
+                switch (builtin.os.tag) {
+                    .windows => {
+                        switch (try winK.WaitForSingleObject(raw.handle, 30)) {
+                            win.WAIT_OBJECT_0 => {
+                                std.debug.print("Esc\r\n", .{});
+                                continue;
+                            },
+                            else => {},
+                        }
+                    },
+                    else => {
+                        if ((try std.posix.poll(&fds.?, 30) <= 0)) {
+                            std.debug.print("Esc\r\n", .{});
+                            continue;
+                        }
+                    },
                 }
                 const c1 = try in_reader.readByte();
                 printNibble(c1, 2);
