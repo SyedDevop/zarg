@@ -57,6 +57,71 @@ pub fn isTerminal(file: std.fs.File) bool {
     return std.posix.isatty(file.handle);
 }
 
+/// Mouse event tracking modes for terminal input handling
+pub const MouseMode = packed struct {
+    /// Track all mouse movement events (ESC[?1003h)
+    /// Generates events for any mouse movement, even without buttons pressed
+    all: bool = false,
+
+    /// Track button events and drags (ESC[?1002h)
+    /// Generates events for clicks, releases, and movement while buttons are pressed
+    button: bool = false,
+
+    /// Track basic click events only (ESC[?1000h)
+    /// Generates events only for button press and release
+    normal: bool = false,
+
+    /// Enable SGR extended mouse format (ESC[?1006h)
+    /// Provides better coordinate handling and click/release distinction
+    // sgr: bool = false,
+
+    const Self = @This();
+    /// Convert the packed struct to a 3-bit unsigned integer
+    pub fn toU3(self: Self) u3 {
+        return @bitCast(self);
+    }
+
+    /// Check if no mouse tracking modes are enabled
+    pub fn isDefault(self: Self) bool {
+        return self.toU3() == 0;
+    }
+
+    /// Enable mouse event tracking by sending appropriate escape sequences
+    /// Sends different sequences based on the enabled mode:
+    /// - all: ESC[?1003h (track all movement)
+    /// - button: ESC[?1002h (track button events and drags)
+    /// - normal: ESC[?1000h (track basic clicks only)
+    /// - default: ESC[?1003h (fallback to all mode)
+    pub fn enableMouseEvent(self: Self, out_writer: anytype) !void {
+        // Enable SGR format if requested
+        // if (self.sgr) {
+        //     try out_writer.print("\x1b[?1006h", .{});
+        // }
+        if (self.isDefault() or self.all) {
+            try out_writer.print("\x1b[?1003h", .{});
+        } else if (self.button) {
+            try out_writer.print("\x1b[?1002h", .{});
+        } else if (self.normal) {
+            try out_writer.print("\x1b[?1000h", .{});
+        }
+    }
+
+    /// Disable mouse event tracking by sending corresponding 'l' sequences
+    /// Sends the disable version (h->l) of whatever mode was enabled
+    pub fn disableMouseEvent(self: Self, out_writer: anytype) !void {
+        if (self.isDefault() or self.all) {
+            try out_writer.print("\x1b[?1003l", .{});
+        } else if (self.button) {
+            try out_writer.print("\x1b[?1002l", .{});
+        } else if (self.normal) {
+            try out_writer.print("\x1b[?1000l", .{});
+        }
+        // Disable SGR format if it was enabled
+        // if (self.sgr) {
+        //     try out_writer.print("\x1b[?1006l", .{});
+        // }
+    }
+};
 /// rawModePosix puts the terminal connected to the given file descriptor into raw
 /// mode and returns the previous state of the terminal so that it can be
 /// restored.
