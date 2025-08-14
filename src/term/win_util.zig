@@ -19,17 +19,28 @@ pub fn getConsoleMode(handle: win.HANDLE) !win.DWORD {
     return switch (winK.GetConsoleMode(handle, &mode)) {
         else => return mode,
         // win.FALSE => {
-            // const err = winK.GetLastError();
-            // return win.unexpectedError(err);
+        // const err = winK.GetLastError();
+        // return win.unexpectedError(err);
         // },
+        win.FALSE => {
+            return switch (winK.GetLastError()) {
+                else => |e| win.unexpectedError(e),
+            };
+        },
     };
 }
 pub fn setConsoleMode(handle: win.HANDLE, mode: win.DWORD) !void {
     switch (winK.SetConsoleMode(handle, mode)) {
+
         // win.FALSE => {
-            // const err = winK.GetLastError();
-            // return win.unexpectedError(err);
+        // const err = winK.GetLastError();
+        // return win.unexpectedError(err);
         // },
+        win.FALSE => {
+            return switch (winK.GetLastError()) {
+                else => |e| win.unexpectedError(e),
+            };
+        },
         else => {},
     }
 }
