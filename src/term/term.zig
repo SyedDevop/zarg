@@ -126,7 +126,12 @@ pub const MouseMode = packed struct {
 const Handel = std.fs.File.Handle;
 pub fn rawMode(handel: Handel) !RawTerm {
     return switch (builtin.os.tag) {
-        .windows => try rawModeWin(handel),
+        .windows => {
+            comptime {
+                std.debug.print("{d}\r\n", .{handel});
+            }
+            try rawModeWin(handel);
+        },
         else => try rawModePosix(handel),
     };
 }
