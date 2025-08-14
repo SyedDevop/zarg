@@ -167,7 +167,7 @@ fn rawModePosix(fd: Handel) !RawTerm {
 fn rawModeWin(fd: Handel) !RawTerm {
     const mode = try winUtil.getConsoleMode(fd);
     var raw = mode & ~(winUtil.ENABLE_ECHO_INPUT | winUtil.ENABLE_PROCESSED_INPUT | winUtil.ENABLE_LINE_INPUT);
-    raw |= win.ENABLE_VIRTUAL_TERMINAL_INPUT;
+    raw |= winUtil.ENABLE_VIRTUAL_TERMINAL_INPUT;
     try winUtil.setConsoleMode(fd, raw);
     return .{
         .orig_termios = mode,
