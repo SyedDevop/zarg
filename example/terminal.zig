@@ -37,17 +37,36 @@ fn printVersion(version_call: Cli.VersionCallFrom) []const u8 {
         .help => "V1.0.0",
     };
 }
+var print_log: bool = true;
 fn printNibble(ch: u8, level: usize) void {
+    if (!print_log) return;
     const pritt_c = if (std.ascii.isPrint(ch)) ch else ' ';
     std.debug.print("readByte::{d} c={c} x={x:3} d={d}\r\n", .{ level, pritt_c, ch, ch });
 }
 
-fn readByteOrNull(reader: anytype) !?u8 {
+fn readByte(reader: anytype) !?u8 {
     return reader.readByte() catch |err| switch (err) {
         error.EndOfStream => null,
         else => return err,
     };
 }
+
+fn waitForInput(
+    // input_handle: std.fs.File.Handle,
+    fd: if (builtin.os.tag == .windows) win.ws2_32.pollfd else std.posix.pollfd,
+    time: i32,
+) !usize {
+    return switch (builtin.os.tag) {
+        .windows => {
+            return win.poll(fd, 0, time);
+        },
+        else => {
+            var fds = [1]std.posix.pollfd{fd};
+            return try std.posix.poll(&fds, time);
+        },
+    };
+}
+
 pub fn main() !void {
     var stdout = std.io.getStdOut();
     const sto_writer = stdout.writer();
@@ -75,14 +94,12 @@ pub fn main() !void {
     defer {
         raw.disableRawMode() catch {};
     }
-    var fds: ?[1]std.posix.pollfd = null;
+    const fds = if (builtin.os.tag == .windows)
+        win.ws2_32.pollfd{ .fd = stdin.handle, .events = win.ws2_32.POLL.IN, .revents = 0 }
+    else
+        std.posix.pollfd{ .fd = stdin.handle, .events = std.posix.POLL.IN, .revents = 0 };
 
-    if (builtin.os.tag != .windows) {
-        fds = .{
-            .{ .fd = stdin.handle, .events = std.posix.POLL.IN, .revents = 0 },
-        };
-    }
-
+    // win.poll(fds: [*]ws2_32.pollfd, n: c_ulong, timeout: i32)
     const clear = zarg.Clear;
     try clear.all_move_curser_top(sto_writer);
     const color = ZColor.Zcolor.init(allocator);
@@ -95,38 +112,24 @@ pub fn main() !void {
 
     // var index: usize = 0;
     while (true) {
-        if (builtin.os.tag != .windows) {
-            const data = try std.posix.poll(&fds.?, 1);
-            if (data == 0) continue;
-        }
+        const data = try waitForInput(fds, 1);
+        // win.poll(fds: [*]ws2_32.pollfd, n: c_ulong, timeout: i32)
+        if (data == 0) continue;
         const in_reader = stdin.reader();
         const c0 = try in_reader.readByte();
         printNibble(c0, 1);
         switch (c0) {
             '\x1b' => {
-                switch (builtin.os.tag) {
-                    .windows => {
-                        switch (winK.WaitForSingleObject(raw.handle, 30)) {
-                            win.WAIT_OBJECT_0 => {
-                                std.debug.print("Esc\r\n", .{});
-                                continue;
-                            },
-                            else => {},
-                        }
-                    },
-                    else => {
-                        if ((try std.posix.poll(&fds.?, 30) <= 0)) {
-                            std.debug.print("Esc\r\n", .{});
-                            continue;
-                        }
-                    },
+                if (try waitForInput(fds, 30) <= 0) {
+                    std.debug.print("Esc\r\n", .{});
+                    continue;
                 }
                 const c1 = try in_reader.readByte();
                 printNibble(c1, 2);
                 switch (c1) {
                     '[' => try parseCsi(in_reader),
                     'O' => {
-                        const c2 = try readByteOrNull(in_reader);
+                        const c2 = try readByte(in_reader);
                         if (c2 == null) return;
                         printNibble(c2.?, 22);
                         switch (c2.?) {
@@ -157,6 +160,9 @@ pub fn main() !void {
                 std.debug.print("{c}\r\n", .{c0});
             },
         }
+        if (c0 == 'p') {
+            print_log = print_log != true;
+        }
         if (c0 == 'c') {
             try zarg.Clear.all_move_curser_top(sto_writer);
         }
@@ -168,7 +174,7 @@ pub fn main() !void {
 }
 
 fn parseCsi(reader: anytype) !void {
-    const c0 = try readByteOrNull(reader);
+    const c0 = try readByte(reader);
     if (c0 == null) return;
     printNibble(c0.?, 3);
 
@@ -180,9 +186,10 @@ fn parseCsi(reader: anytype) !void {
         'F' => std.debug.print("End  \r\n", .{}),
         'H' => std.debug.print("Home  \r\n", .{}),
         '\x31' => {
-            const c1 = try readByteOrNull(reader);
+            const c1 = try readByte(reader);
             if (c1 == null) return;
             printNibble(c1.?, 4);
+
             switch (c1.?) {
                 '0' => {
                     var buf = [4]u8{ 0, 0, 0, 0 };
@@ -191,17 +198,18 @@ fn parseCsi(reader: anytype) !void {
                         std.debug.print("Ctrl + i\r\n", .{});
                     }
                 },
+
                 '5' => std.debug.print("f5 \r\n", .{}),
                 '7' => std.debug.print("f6 \r\n", .{}),
                 '8' => std.debug.print("f7 \r\n", .{}),
                 '9' => std.debug.print("f8 \r\n", .{}),
                 ';' => {
-                    const c2 = try readByteOrNull(reader);
+                    const c2 = try readByte(reader);
                     if (c2 == null) return;
                     printNibble(c2.?, 41);
                     switch (c2.?) {
                         '2' => {
-                            const c3 = try readByteOrNull(reader);
+                            const c3 = try readByte(reader);
                             if (c3 == null) return;
                             printNibble(c3.?, 411);
                             switch (c3.?) {
@@ -213,7 +221,7 @@ fn parseCsi(reader: anytype) !void {
                             }
                         },
                         '3' => {
-                            const c3 = try readByteOrNull(reader);
+                            const c3 = try readByte(reader);
                             if (c3 == null) return;
                             printNibble(c3.?, 412);
                             switch (c3.?) {
@@ -225,7 +233,7 @@ fn parseCsi(reader: anytype) !void {
                             }
                         },
                         '4' => {
-                            const c3 = try readByteOrNull(reader);
+                            const c3 = try readByte(reader);
                             if (c3 == null) return;
                             printNibble(c3.?, 413);
                             switch (c3.?) {
@@ -237,7 +245,7 @@ fn parseCsi(reader: anytype) !void {
                             }
                         },
                         '5' => {
-                            const c3 = try readByteOrNull(reader);
+                            const c3 = try readByte(reader);
                             if (c3 == null) return;
                             printNibble(c3.?, 413);
                             switch (c3.?) {
@@ -249,7 +257,7 @@ fn parseCsi(reader: anytype) !void {
                             }
                         },
                         '6' => {
-                            const c3 = try readByteOrNull(reader);
+                            const c3 = try readByte(reader);
                             if (c3 == null) return;
                             printNibble(c3.?, 414);
                             switch (c3.?) {
@@ -261,7 +269,7 @@ fn parseCsi(reader: anytype) !void {
                             }
                         },
                         '7' => {
-                            const c3 = try readByteOrNull(reader);
+                            const c3 = try readByte(reader);
                             if (c3 == null) return;
                             printNibble(c3.?, 414);
                             switch (c3.?) {
@@ -279,7 +287,7 @@ fn parseCsi(reader: anytype) !void {
             }
         },
         '2' => {
-            const c2 = try readByteOrNull(reader);
+            const c2 = try readByte(reader);
             if (c2 == null) return;
             printNibble(c2.?, 6);
             switch (c2.?) {
@@ -290,6 +298,7 @@ fn parseCsi(reader: anytype) !void {
                 '~' => std.debug.print("Insert \r\n", .{}),
                 else => {},
             }
+            _ = try readByte(reader);
         },
         '3' => std.debug.print("Delete   \r\n", .{}),
         '5' => std.debug.print("Up   page\r\n", .{}),
