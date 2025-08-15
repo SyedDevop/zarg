@@ -8,6 +8,8 @@ const builtin = @import("builtin");
 const Cli = zarg.Cli;
 const ZColor = zarg.ZColor;
 
+const is_windows = builtin.os.tag == .windows;
+
 const USAGE =
     \\Example to use zarg terminal
     \\------------------
@@ -53,15 +55,15 @@ fn readByte(reader: anytype) !?u8 {
 
 pub extern "kernel32" fn GetNumberOfConsoleInputEvents(
     hConsoleInput: win.HANDLE,
-    lpcNumberOfEvents: win.DWORD_PTR,
+    lpcNumberOfEvents: *win.DWORD,
 ) callconv(.winapi) win.BOOL;
-
-fn waitForInput(input_handle: std.fs.File.Handle, fd: ?std.posix.pollfd, time: i32) !usize {
+const WaitTime = if (is_windows) u32 else i32;
+fn waitForInput(input_handle: std.fs.File.Handle, fd: ?std.posix.pollfd, time: WaitTime) !usize {
     return switch (builtin.os.tag) {
         .windows => switch (winK.WaitForSingleObject(input_handle, time)) {
             win.WAIT_OBJECT_0 => {
                 var num_events: u32 = 0;
-                if (winK.GetNumberOfConsoleInputEvents(input_handle, &num_events) == 0) return 0;
+                if (GetNumberOfConsoleInputEvents(input_handle, &num_events) == 0) return 0;
                 return num_events;
             },
             else => 0,
