@@ -51,17 +51,11 @@ fn readByte(reader: anytype) !?u8 {
     };
 }
 
-fn waitForInput(
-    // input_handle: std.fs.File.Handle,
-    fd: if (builtin.os.tag == .windows) win.ws2_32.pollfd else std.posix.pollfd,
-    time: i32,
-) !usize {
+fn waitForInput(input_handle: std.fs.File.Handle, fd: ?std.posix.pollfd, time: i32) !usize {
     return switch (builtin.os.tag) {
-        .windows => {
-            return win.poll(fd, 0, time);
-        },
+        .windows => winK.WaitForSingleObject(input_handle, time),
         else => {
-            var fds = [1]std.posix.pollfd{fd};
+            var fds = [1]std.posix.pollfd{fd.?};
             return try std.posix.poll(&fds, time);
         },
     };
@@ -94,12 +88,11 @@ pub fn main() !void {
     defer {
         raw.disableRawMode() catch {};
     }
-    const fds = if (builtin.os.tag == .windows)
-        win.ws2_32.pollfd{ .fd = stdin.handle, .events = win.ws2_32.POLL.IN, .revents = 0 }
+    const fds: ?std.posix.pollfd = if (builtin.os.tag != .windows)
+        .{ .fd = stdin.handle, .events = std.posix.POLL.IN, .revents = 0 }
     else
-        std.posix.pollfd{ .fd = stdin.handle, .events = std.posix.POLL.IN, .revents = 0 };
+        null;
 
-    // win.poll(fds: [*]ws2_32.pollfd, n: c_ulong, timeout: i32)
     const clear = zarg.Clear;
     try clear.all_move_curser_top(sto_writer);
     const color = ZColor.Zcolor.init(allocator);
@@ -112,15 +105,14 @@ pub fn main() !void {
 
     // var index: usize = 0;
     while (true) {
-        const data = try waitForInput(fds, 1);
-        // win.poll(fds: [*]ws2_32.pollfd, n: c_ulong, timeout: i32)
+        const data = try waitForInput(raw.handle, fds, 1);
         if (data == 0) continue;
         const in_reader = stdin.reader();
         const c0 = try in_reader.readByte();
         printNibble(c0, 1);
         switch (c0) {
             '\x1b' => {
-                if (try waitForInput(fds, 30) <= 0) {
+                if (try waitForInput(raw.handle, fds, 30) <= 0) {
                     std.debug.print("Esc\r\n", .{});
                     continue;
                 }
