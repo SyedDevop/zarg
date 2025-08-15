@@ -51,9 +51,21 @@ fn readByte(reader: anytype) !?u8 {
     };
 }
 
+pub extern "kernel32" fn GetNumberOfConsoleInputEvents(
+    hConsoleInput: win.HANDLE,
+    lpcNumberOfEvents: win.DWORD_PTR,
+) callconv(.winapi) win.BOOL;
+
 fn waitForInput(input_handle: std.fs.File.Handle, fd: ?std.posix.pollfd, time: i32) !usize {
     return switch (builtin.os.tag) {
-        .windows => winK.WaitForSingleObject(input_handle, time),
+        .windows => switch (winK.WaitForSingleObject(input_handle, time)) {
+            win.WAIT_OBJECT_0 => {
+                var num_events: u32 = 0;
+                if (winK.GetNumberOfConsoleInputEvents(input_handle, &num_events) == 0) return 0;
+                return num_events;
+            },
+            else => 0,
+        },
         else => {
             var fds = [1]std.posix.pollfd{fd.?};
             return try std.posix.poll(&fds, time);
