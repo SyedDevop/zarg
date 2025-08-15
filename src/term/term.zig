@@ -126,12 +126,7 @@ pub const MouseMode = packed struct {
 const Handel = std.fs.File.Handle;
 pub fn rawMode(handel: Handel) !RawTerm {
     return switch (builtin.os.tag) {
-        .windows => {
-            comptime {
-                std.debug.print("{d}\r\n", .{handel});
-            }
-            try rawModeWin(handel);
-        },
+        .windows => try rawModeWin(handel),
         else => try rawModePosix(handel),
     };
 }
@@ -139,7 +134,7 @@ pub fn rawMode(handel: Handel) !RawTerm {
 /// mode and returns the previous state of the terminal so that it can be
 /// restored.
 fn rawModePosix(fd: Handel) !RawTerm {
-    const original_termios = try posix.tcgetattr(posix.STDIN_FILENO);
+    const original_termios = try posix.tcgetattr(fd);
     var raw = original_termios;
 
     raw.iflag.IGNBRK = false;

@@ -71,7 +71,7 @@ pub fn main() !void {
     const terminal = zarg.Term;
     const mouse = terminal.MouseMode{ .normal = true };
 
-    var raw = try terminal.rawMode(stdout.handle);
+    var raw = try terminal.rawMode(stdin.handle);
     defer {
         raw.disableRawMode() catch {};
     }
@@ -106,7 +106,7 @@ pub fn main() !void {
             '\x1b' => {
                 switch (builtin.os.tag) {
                     .windows => {
-                        switch ( winK.WaitForSingleObject(raw.handle, 30)) {
+                        switch (winK.WaitForSingleObject(raw.handle, 30)) {
                             win.WAIT_OBJECT_0 => {
                                 std.debug.print("Esc\r\n", .{});
                                 continue;
@@ -221,6 +221,18 @@ fn parseCsi(reader: anytype) !void {
                                 'B' => std.debug.print("Alt + Down  \r\n", .{}),
                                 'C' => std.debug.print("Alt + Right \r\n", .{}),
                                 'D' => std.debug.print("Alt + Left  \r\n", .{}),
+                                else => {},
+                            }
+                        },
+                        '4' => {
+                            const c3 = try readByteOrNull(reader);
+                            if (c3 == null) return;
+                            printNibble(c3.?, 413);
+                            switch (c3.?) {
+                                'A' => std.debug.print("Alt + Shift + Up    \r\n", .{}),
+                                'B' => std.debug.print("Alt + Shift + Down  \r\n", .{}),
+                                'C' => std.debug.print("Alt + Shift + Right \r\n", .{}),
+                                'D' => std.debug.print("Alt + Shift + Left  \r\n", .{}),
                                 else => {},
                             }
                         },
