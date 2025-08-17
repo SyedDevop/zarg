@@ -35,6 +35,10 @@ pub fn screenToCursor(writer: anytype) !void {
     return std.fmt.format(writer, utils.csi ++ utils.clear_screen_to_cursor, .{});
 }
 
+pub fn clearLeftChar(writer: anytype) !void {
+    return std.fmt.format(writer, "\x08 \x08", .{});
+}
+
 /// Clear all screen
 pub fn all(writer: anytype) !void {
     return std.fmt.format(writer, utils.csi ++ utils.clear_all, .{});
