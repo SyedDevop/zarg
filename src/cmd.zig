@@ -29,9 +29,21 @@ pub const ArgValue = union(enum) {
             else => {},
         }
     }
+
+    pub fn isNull(self: ArgValue) bool {
+        return switch (self) {
+            .str => |str| return str == null,
+            .bool => |b| return b == null,
+            .num => |n| return n == null,
+            .list => |l| return l == null,
+        };
+    }
 };
 
+/// Indicates the context in which the version string is being requested,
+/// such as for a `--version` or `--help` display.
 pub const VersionCallFrom = enum { version, help };
+
 const VersionType = union(enum) {
     str: []const u8,
     fun: *const fn (_: VersionCallFrom) []const u8,
@@ -101,6 +113,60 @@ pub fn Cmd(comptime CmdEnum: type) type {
     };
 }
 
+pub const ComputedArgs = struct {
+    const Self = @This();
+    data: ArgsList,
+    alloc: Allocator,
+
+    pub fn getStrArg(self: Self, arg_name: []const u8) !?[]const u8 {
+        for (self.data.items) |arg| {
+            if (std.mem.eql(u8, arg.long, arg_name) or std.mem.eql(u8, arg.short, arg_name)) {
+                if (arg.value != .str) {
+                    return error.ArgIsNotStr;
+                }
+                return arg.value.str;
+            }
+        }
+        return null;
+    }
+
+    pub fn getNumArg(self: Self, arg_name: []const u8) !?i32 {
+        for (self.data.items) |arg| {
+            if (std.mem.eql(u8, arg.long, arg_name) or std.mem.eql(u8, arg.short, arg_name)) {
+                if (arg.value != .num) {
+                    return error.ArgIsNotNum;
+                }
+                return arg.value.num;
+            }
+        }
+        return null;
+    }
+
+    pub fn getBoolArg(self: Self, arg_name: []const u8) !bool {
+        for (self.data.items) |arg| {
+            if (std.mem.eql(u8, arg.long, arg_name) or std.mem.eql(u8, arg.short, arg_name)) {
+                if (arg.value != .bool) {
+                    return error.ArgIsNotBool;
+                }
+                if (arg.value.bool) |val| {
+                    return val;
+                } else {
+                    return false;
+                }
+            }
+        }
+        return false;
+    }
+    pub fn append(self: *Self, arg: Arg) !void {
+        try self.data.append(arg);
+    }
+
+    pub fn deinit(self: Self) void {
+        for (self.data.items) |*item| if (item.is_alloc) try item.value.free(self.alloc);
+        self.data.deinit();
+    }
+};
+
 pub const CliParseError = error{
     InsufficientArguments,
     ShowHelp,
@@ -122,7 +188,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
 
         alloc: Allocator,
 
-        computed_args: ArgsList,
+        computed_args: ComputedArgs,
         cmds: []const CmdT,
         running_cmd: CmdT,
 
@@ -209,11 +275,10 @@ pub fn CliInit(comptime CmdEnum: type) type {
                 CliParseError.MinPosArg => try std.fmt.allocPrint(self.alloc, "The command '{s}' requires at least {d} positional argument(s).", .{ @tagName(self.running_cmd.name), self.running_cmd.min_pos_arg }),
 
                 CliParseError.ShowVersion => {
-                    const version = switch (self.version) {
-                        .str => |v| v,
-                        .fun => |f| f(.version),
-                    };
-                    std.debug.print("{s} {s}", .{ self.name, version });
+                    switch (self.version) {
+                        .str => |v| std.debug.print("{s} {s}", .{ self.name, v }),
+                        .fun => |f| std.debug.print("{s}", .{f(.version)}),
+                    }
                     return null;
                 },
                 CliParseError.ShowHelp => {
@@ -297,7 +362,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
                 //TODO: Maybe this for loop can be a hash map.
                 for (opts) |opt| {
                     if (std.mem.eql(u8, opt.long, kv_arg.key)) {
-                        if (kv_arg.value == null) {
+                        if (kv_arg.value == null and opt.value != .bool and opt.value.isNull()) {
                             self.err_msg = try std.fmt.bufPrint(&self.err_msg_buf, "{s}", .{kv_arg.key});
                             return CliParseError.ValueRequired;
                         }
@@ -317,10 +382,10 @@ pub fn CliInit(comptime CmdEnum: type) type {
                                 try self.computed_args.append(self.alloc, copy_opt);
                             },
                             .num => {
-                                const num = std.fmt.parseInt(i32, kv_arg.value.?, 10) catch |e| switch (e) {
+                                const num = if (kv_arg.value) |v| std.fmt.parseInt(i32, v, 10) catch |e| switch (e) {
                                     error.InvalidCharacter => null,
                                     else => return e,
-                                };
+                                } else opt.value.num.?;
                                 copy_opt.value = .{ .num = num };
                                 try self.computed_args.append(self.alloc, copy_opt);
                             },
@@ -358,7 +423,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
 
                                     const kv_arg = try parseKVArg(args.items);
                                     // try kv_arg.print();
-                                    if (kv_arg.value == null) {
+                                    if (kv_arg.value == null and opt.value.isNull()) {
                                         self.err_msg = std.fmt.bufPrint(&self.err_msg_buf, "{s}", .{kv_arg.key}) catch unreachable;
                                         return CliParseError.ValueRequired;
                                     }
@@ -370,14 +435,14 @@ pub fn CliInit(comptime CmdEnum: type) type {
                                             try self.computed_args.append(self.alloc, copy_opt);
                                         },
                                         .num => {
-                                            const num = std.fmt.parseInt(i32, kv_arg.value.?, 10) catch |e| switch (e) {
+                                            const num = if (kv_arg.value) |v| std.fmt.parseInt(i32, v, 10) catch |e| switch (e) {
                                                 error.InvalidCharacter => null,
                                                 else => return e,
-                                            };
+                                            } else opt.value.num.?;
                                             copy_opt.value = .{ .num = num };
                                             try self.computed_args.append(self.alloc, copy_opt);
                                         },
-                                        .list => @panic("TODO: List Not implemented"),
+                                        .list => util.logLocMessage("TODO: List Not implemented", @src()),
                                         .bool => unreachable,
                                     }
                                 },
@@ -423,43 +488,15 @@ pub fn CliInit(comptime CmdEnum: type) type {
         }
 
         pub fn getStrArg(self: Self, arg_name: []const u8) !?[]const u8 {
-            for (self.computed_args.items) |arg| {
-                if (std.mem.eql(u8, arg.long, arg_name) or std.mem.eql(u8, arg.short, arg_name)) {
-                    if (arg.value != .str) {
-                        return error.ArgIsNotStr;
-                    }
-                    return arg.value.str;
-                }
-            }
-            return null;
+            return self.computed_args.getStrArg(arg_name);
         }
 
         pub fn getNumArg(self: Self, arg_name: []const u8) !?i32 {
-            for (self.computed_args.items) |arg| {
-                if (std.mem.eql(u8, arg.long, arg_name) or std.mem.eql(u8, arg.short, arg_name)) {
-                    if (arg.value != .num) {
-                        return error.ArgIsNotNum;
-                    }
-                    return arg.value.num;
-                }
-            }
-            return null;
+            return self.computed_args.getNumArg(arg_name);
         }
 
         pub fn getBoolArg(self: Self, arg_name: []const u8) !bool {
-            for (self.computed_args.items) |arg| {
-                if (std.mem.eql(u8, arg.long, arg_name) or std.mem.eql(u8, arg.short, arg_name)) {
-                    if (arg.value != .bool) {
-                        return error.ArgIsNotBool;
-                    }
-                    if (arg.value.bool) |val| {
-                        return val;
-                    } else {
-                        return false;
-                    }
-                }
-            }
-            return false;
+            return self.computed_args.getBoolArg(arg_name);
         }
 
         pub fn help(self: Self) !void {
