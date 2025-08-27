@@ -246,6 +246,14 @@ pub const Style = struct {
         if (self.padding.down > 0) try writer.print("\x1B[{d}B", .{self.padding.down});
         if (self.padding.right > 0) try writer.print("\x1B[{d}C", .{self.padding.right});
     }
+
+    pub fn reset(self: *Self) void {
+        self.fontStyle = .{};
+        self.controlCode = .{};
+        self.bgColor = null;
+        self.fgColor = null;
+        self.padding = .{};
+    }
 };
 
 const esc = "\x1B";
@@ -269,7 +277,7 @@ pub const Zcolor = struct {
         const fmt_text = try std.fmt.allocPrint(self.alloc, text, args);
         defer self.alloc.free(fmt_text);
 
-        var print_text = std.ArrayList(u8).init(self.alloc);
+        var print_text = std.array_list.Managed(u8).init(self.alloc);
         try style.render(fmt_text, print_text.writer());
         return print_text.toOwnedSlice();
     }

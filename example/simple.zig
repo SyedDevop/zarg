@@ -1,14 +1,14 @@
 const std = @import("std");
 const zarg = @import("zarg");
 
-const Cli = zarg.cli;
+const Cli = zarg.Cli;
 const Color = zarg.ZColor;
 
 const USAGE =
     \\Example to use zarg
     \\------------------
 ;
-const CmdType = zarg.Cmd(UserCmd);
+const CmdType = Cli.Cmd(UserCmd);
 
 const xmd = [_]CmdType{
     CmdType{
@@ -110,7 +110,7 @@ pub const UserCmd = enum {
     list,
 };
 
-fn printVersion(version_call: zarg.VersionCallFrom) []const u8 {
+fn printVersion(version_call: Cli.VersionCallFrom) []const u8 {
     return switch (version_call) {
         .version => "Game  on \n V1000",
         .help => "V 1.0.0.0",
@@ -122,8 +122,8 @@ pub fn main() !void {
     const allocator = gpa.allocator();
     defer _ = gpa.deinit();
 
-    var cli = try zarg.Cli(UserCmd)
-        .init(allocator, "Z Math", USAGE, .{ .fun = &printVersion }, &xmd);
+    var cli = try Cli.CliInit(UserCmd)
+        .init(allocator, "Z Sim", USAGE, .{ .fun = &printVersion }, &xmd);
     defer cli.deinit();
 
     cli.parse() catch |err| {
@@ -131,9 +131,9 @@ pub fn main() !void {
         return;
     };
     const color = Color.Zcolor.init(allocator);
-    var text = std.ArrayList(u8).init(allocator);
-    defer text.deinit();
-    var text_w = text.writer();
+    var text: std.ArrayList(u8) = .empty;
+    defer text.deinit(allocator);
+    var text_w = text.writer(allocator);
 
     var header_style = Color.Style{
         .fontStyle = .{
@@ -160,9 +160,9 @@ pub fn main() !void {
 
     std.debug.print("{s}\n", .{body});
 
-    std.debug.print("The Command is     |{?s}|\n", .{@tagName(cli.running_cmd.name)});
-    std.debug.print("The Input is       |{?s}|\n", .{cli.pos_args});
-    std.debug.print("The Rest Input is  |{?s}|\n", .{cli.rest_args});
+    std.debug.print("The Command is     |{t}|\n", .{cli.running_cmd.name});
+    std.debug.print("The Input is       |{?any}|\n", .{cli.pos_args});
+    std.debug.print("The Rest Input is  |{?any}|\n", .{cli.rest_args});
     switch (cli.running_cmd.name) {
         .add => {
             const a = if (try cli.getNumArg("-a")) |a| a else 0;
@@ -177,9 +177,9 @@ pub fn main() !void {
             for (cli.computed_args.data.items) |v| {
                 switch (v.value) {
                     .str => |s| std.debug.print("<str > Computed args V:{?s} L:{s} S:{s} \n", .{ s, v.long, v.short }),
-                    .bool => |bo| std.debug.print("<bool> Computed args V:{?}  L:{s} S:{s} \n", .{ bo, v.long, v.short }),
+                    .bool => |bo| std.debug.print("<bool> Computed args V:{?any}  L:{s} S:{s} \n", .{ bo, v.long, v.short }),
                     .num => |n| std.debug.print("<num > Computed args V:{?d} L:{s} S:{s} \n", .{ n, v.long, v.short }),
-                    .list => |l| std.debug.print("<list> Computed args V:{?s} L:{s} S:{s} \n", .{ l, v.long, v.short }),
+                    .list => |l| std.debug.print("<list> Computed args V:{?any} L:{s} S:{s} \n", .{ l, v.long, v.short }),
                 }
             }
             std.debug.print("The Command is add(a:{d}, b:{d}, c:{d})  {d}\n", .{ a, b, c, a + b + c });

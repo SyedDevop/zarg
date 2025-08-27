@@ -35,11 +35,19 @@ pub fn screenToCursor(writer: anytype) !void {
     return std.fmt.format(writer, utils.csi ++ utils.clear_screen_to_cursor, .{});
 }
 
-/// Clear all screen
-pub fn all(writer: anytype) !void {
-    return std.fmt.format(writer, utils.csi ++ utils.clear_all, .{});
+pub fn clearLeftChar(writer: *std.Io.Writer) !void {
+    return writer.writeAll("\x08 \x08");
 }
 
+/// Clear all screen
+pub fn all(writer: *std.Io.Writer) !void {
+    return writer.writeAll(utils.csi ++ utils.clear_all);
+}
+
+pub fn all_move_curser_top(writer: *std.Io.Writer) !void {
+    try all(writer);
+    return writer.writeAll(utils.csi ++ "H");
+}
 /// Clear from cursor to end of line
 pub fn line_from_cursor(writer: anytype) !void {
     return std.fmt.format(writer, utils.csi ++ utils.clear_line_from_cursor, .{});
