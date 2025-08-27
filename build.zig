@@ -25,9 +25,11 @@ pub fn build(b: *std.Build) void {
 
     // Unit tests for the library
     const libTests = b.addTest(.{
-        .root_source_file = b.path("src/zarg.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/zarg.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     const runLibTests = b.addRunArtifact(libTests);
 

@@ -277,7 +277,7 @@ pub const Zcolor = struct {
         const fmt_text = try std.fmt.allocPrint(self.alloc, text, args);
         defer self.alloc.free(fmt_text);
 
-        var print_text = std.ArrayList(u8).init(self.alloc);
+        var print_text = std.array_list.Managed(u8).init(self.alloc);
         try style.render(fmt_text, print_text.writer());
         return print_text.toOwnedSlice();
     }

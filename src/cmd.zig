@@ -172,7 +172,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
                 .cmds = commands,
                 .running_cmd = commands[0],
                 .version = version,
-                .computed_args = ArgsList.init(allocate),
+                .computed_args = .empty,
             };
         }
 
@@ -238,8 +238,8 @@ pub fn CliInit(comptime CmdEnum: type) type {
             defer std.process.argsFree(self.alloc, args);
 
             var argList = try RawArgs.initCapacity(self.alloc, args.len);
-            defer argList.deinit();
-            try argList.appendSlice(args);
+            defer argList.deinit(self.alloc);
+            try argList.appendSlice(self.alloc, args);
 
             try self.parseAllArgs(&argList);
         }
@@ -253,10 +253,10 @@ pub fn CliInit(comptime CmdEnum: type) type {
 
             if (args.items.len < self.running_cmd.min_arg) return CliParseError.InsufficientArguments;
 
-            var pos_arg_list = std.ArrayList([]const u8).init(self.alloc);
+            var pos_arg_list: std.ArrayList([]const u8) = .empty;
             errdefer {
                 for (pos_arg_list.items) |pos_arg| self.alloc.free(pos_arg);
-                pos_arg_list.deinit();
+                pos_arg_list.deinit(self.alloc);
             }
 
             while (args.items.len > 0) {
@@ -275,12 +275,12 @@ pub fn CliInit(comptime CmdEnum: type) type {
                     try self.parseFlag(args);
                 } else {
                     const copy = try self.alloc.dupe(u8, arg);
-                    try pos_arg_list.append(copy);
+                    try pos_arg_list.append(self.alloc, copy);
                     _ = args.orderedRemove(0);
                 }
             }
             if (pos_arg_list.items.len < self.running_cmd.min_pos_arg) return CliParseError.MinPosArg;
-            self.pos_args = try pos_arg_list.toOwnedSlice();
+            self.pos_args = try pos_arg_list.toOwnedSlice(self.alloc);
         }
 
         fn parseFlag(self: *Self, args: *RawArgs) !void {
@@ -309,12 +309,12 @@ pub fn CliInit(comptime CmdEnum: type) type {
                                 defer self.alloc.free(lower_value);
                                 _ = std.ascii.lowerString(lower_value, lower_value);
                                 copy_opt.value = .{ .bool = std.mem.eql(u8, lower_value, "true") };
-                                try self.computed_args.append(copy_opt);
+                                try self.computed_args.append(self.alloc, copy_opt);
                             },
                             .str => {
                                 copy_opt.is_alloc = true;
                                 copy_opt.value = .{ .str = try self.alloc.dupe(u8, kv_arg.value.?) };
-                                try self.computed_args.append(copy_opt);
+                                try self.computed_args.append(self.alloc, copy_opt);
                             },
                             .num => {
                                 const num = std.fmt.parseInt(i32, kv_arg.value.?, 10) catch |e| switch (e) {
@@ -322,7 +322,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
                                     else => return e,
                                 };
                                 copy_opt.value = .{ .num = num };
-                                try self.computed_args.append(copy_opt);
+                                try self.computed_args.append(self.alloc, copy_opt);
                             },
                             .list => util.logLocMessage("TODO: List Not implemented", @src()),
                         }
@@ -348,7 +348,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
                             switch (opt.value) {
                                 .bool => {
                                     copy_opt.value = .{ .bool = true };
-                                    try self.computed_args.append(copy_opt);
+                                    try self.computed_args.append(self.alloc, copy_opt);
                                 },
                                 else => {
                                     if (j < short_flags.len - 1) {
@@ -367,7 +367,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
                                         .str => {
                                             copy_opt.is_alloc = true;
                                             copy_opt.value = .{ .str = try self.alloc.dupe(u8, kv_arg.value.?) };
-                                            try self.computed_args.append(copy_opt);
+                                            try self.computed_args.append(self.alloc, copy_opt);
                                         },
                                         .num => {
                                             const num = std.fmt.parseInt(i32, kv_arg.value.?, 10) catch |e| switch (e) {
@@ -375,7 +375,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
                                                 else => return e,
                                             };
                                             copy_opt.value = .{ .num = num };
-                                            try self.computed_args.append(copy_opt);
+                                            try self.computed_args.append(self.alloc, copy_opt);
                                         },
                                         .list => @panic("TODO: List Not implemented"),
                                         .bool => unreachable,
@@ -416,8 +416,8 @@ pub fn CliInit(comptime CmdEnum: type) type {
             if (self.pos_args == null) return null;
             var pos_list = std.ArrayList(u8).init(self.alloc);
             for (self.pos_args.?) |pos_arg| {
-                try pos_list.appendSlice(pos_arg);
-                try pos_list.append(' ');
+                try pos_list.appendSlice(self.alloc, pos_arg);
+                try pos_list.append(self.alloc, ' ');
             }
             return try pos_list.toOwnedSlice();
         }
@@ -463,7 +463,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
         }
 
         pub fn help(self: Self) !void {
-            const stdout = std.io.getStdOut().writer();
+            const stdout = std.fs.File.stdout().deprecatedWriter();
             if (self.description) |dis| {
                 const version = switch (self.version) {
                     .str => |s| s,
@@ -497,51 +497,51 @@ pub fn CliInit(comptime CmdEnum: type) type {
         }
 
         fn generateArgsPrintFmt(self: Self, cmd: *const CmdT) ![]const u8 {
-            var cmd_fmt = std.ArrayList(u8).init(self.alloc);
-            var cmd_writer = cmd_fmt.writer();
+            var cmd_fmt: std.ArrayList(u8) = .empty;
+            var cmd_writer = cmd_fmt.writer(self.alloc);
             const max = maxStrLens(cmd);
             if (cmd.options) |opt| {
                 for (opt) |value| {
-                    for (0..max.short - value.short.len) |_| try cmd_fmt.append(' ');
-                    try cmd_fmt.appendSlice(value.short);
-                    try cmd_fmt.appendSlice(", ");
-                    for (0..max.long - value.long.len) |_| try cmd_fmt.append(' ');
-                    try cmd_fmt.appendSlice(value.long);
+                    for (0..max.short - value.short.len) |_| try cmd_fmt.append(self.alloc, ' ');
+                    try cmd_fmt.appendSlice(self.alloc, value.short);
+                    try cmd_fmt.appendSlice(self.alloc, ", ");
+                    for (0..max.long - value.long.len) |_| try cmd_fmt.append(self.alloc, ' ');
+                    try cmd_fmt.appendSlice(self.alloc, value.long);
                     try cmd_writer.print(" {s:6}", .{value.getValueType()});
-                    for (0..(2)) |_| try cmd_fmt.append(' ');
-                    try cmd_fmt.appendSlice(value.info);
-                    try cmd_fmt.append('\n');
+                    for (0..(2)) |_| try cmd_fmt.append(self.alloc, ' ');
+                    try cmd_fmt.appendSlice(self.alloc, value.info);
+                    try cmd_fmt.append(self.alloc, '\n');
                 }
             }
             for (DEFAULT_ARGS) |value| {
-                for (0..max.short - value.short.len) |_| try cmd_fmt.append(' ');
-                try cmd_fmt.appendSlice(value.short);
-                try cmd_fmt.appendSlice(", ");
-                for (0..max.long - value.long.len) |_| try cmd_fmt.append(' ');
-                try cmd_fmt.appendSlice(value.long);
+                for (0..max.short - value.short.len) |_| try cmd_fmt.append(self.alloc, ' ');
+                try cmd_fmt.appendSlice(self.alloc, value.short);
+                try cmd_fmt.appendSlice(self.alloc, ", ");
+                for (0..max.long - value.long.len) |_| try cmd_fmt.append(self.alloc, ' ');
+                try cmd_fmt.appendSlice(self.alloc, value.long);
                 try cmd_writer.print(" {s:6}", .{value.getValueType()});
-                for (0..(2)) |_| try cmd_fmt.append(' ');
-                try cmd_fmt.appendSlice(value.info);
-                try cmd_fmt.append('\n');
+                for (0..(2)) |_| try cmd_fmt.append(self.alloc, ' ');
+                try cmd_fmt.appendSlice(self.alloc, value.info);
+                try cmd_fmt.append(self.alloc, '\n');
             }
-            return try cmd_fmt.toOwnedSlice();
+            return try cmd_fmt.toOwnedSlice(self.alloc);
         }
 
         fn generateCmdPrintFmt(self: Self) ![]const u8 {
-            var cmd_fmt = std.ArrayList(u8).init(self.alloc);
+            var cmd_fmt: std.ArrayList(u8) = .empty;
             const max = maxCmdStrLens(self.cmds);
             for (self.cmds) |value| {
                 if (value.name == self.cmds[0].name) continue;
                 const name = @tagName(value.name);
                 const name_pad = max.cmd - name.len;
-                for (0..name_pad) |_| try cmd_fmt.append(' ');
-                try cmd_fmt.appendSlice(name);
-                try cmd_fmt.appendSlice(":    ");
-                try cmd_fmt.appendSlice(value.info orelse "");
-                try cmd_fmt.append('\n');
+                for (0..name_pad) |_| try cmd_fmt.append(self.alloc, ' ');
+                try cmd_fmt.appendSlice(self.alloc, name);
+                try cmd_fmt.appendSlice(self.alloc, ":    ");
+                try cmd_fmt.appendSlice(self.alloc, value.info orelse "");
+                try cmd_fmt.append(self.alloc, '\n');
             }
 
-            return try cmd_fmt.toOwnedSlice();
+            return try cmd_fmt.toOwnedSlice(self.alloc);
         }
 
         pub fn deinitPosArgs(self: *Self) void {
@@ -560,7 +560,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
 
         pub fn deinit(self: *Self) void {
             for (self.computed_args.items) |*item| if (item.is_alloc) try item.value.free(self.alloc);
-            self.computed_args.deinit();
+            self.computed_args.deinit(self.alloc);
             self.deinitPosArgs();
             self.deinitRestArgs();
             self.alloc.free(self.executable_name);

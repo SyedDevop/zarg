@@ -40,12 +40,11 @@ fn printVersion(version_call: Cli.VersionCallFrom) []const u8 {
     };
 }
 var print_log: bool = true;
-
+var stdout_buffer: [1024]u8 = undefined;
 pub fn main() !void {
-    var stdout = std.io.getStdOut();
-    const sto_writer = stdout.writer();
-
-    const stdin = std.io.getStdIn();
+    var stdout = std.fs.File.stdout();
+    var sto_writer = stdout.writer(&stdout_buffer).interface;
+    const stdin = std.fs.File.stdin();
     // const sti_writer = stdin.writer();
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -71,14 +70,14 @@ pub fn main() !void {
     }
 
     const clear = zarg.Clear;
-    try clear.all_move_curser_top(sto_writer);
+    try clear.all_move_curser_top(&sto_writer);
     const color = ZColor.Zcolor.init(allocator);
     _ = color;
     try stdout.writeAll("Press Q or Ctr+q to quit \r\n");
-    try sto_writer.print("{?any}\n\r", .{try terminal.getSize(std.io.getStdOut())});
+    try sto_writer.print("{?any}\n\r", .{try terminal.getSize(stdout)});
 
-    try mouse.enableMouseEvent(sto_writer);
-    defer mouse.disableMouseEvent(sto_writer) catch {};
+    try mouse.enableMouseEvent(&sto_writer);
+    defer mouse.disableMouseEvent(&sto_writer) catch {};
 
     // var index: usize = 0;
     while (true) {
@@ -96,7 +95,7 @@ pub fn main() !void {
         } else if (key == .Enter) {
             std.debug.print("\r\n", .{});
         } else if (key == .BackSpace) {
-            try clear.clearLeftChar(sto_writer);
+            try clear.clearLeftChar(&sto_writer);
         }
         // switch (try keys.next()) {
         //     .Char => |c| switch (c) {

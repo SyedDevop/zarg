@@ -107,10 +107,10 @@ pub const Keys = union(enum) {
     }
 };
 
-in_reader: std.fs.File.Reader,
+in_reader: std.Io.Reader,
 input_handle: std.fs.File.Handle,
 fds: ?[1]pollfd = null,
-
+var stdin_buffer: [1024]u8 = undefined;
 pub fn init(input: std.fs.File) Self {
     const fds: ?[1]pollfd = if (is_windows) null else .{.{
         .fd = input.handle,
@@ -120,7 +120,7 @@ pub fn init(input: std.fs.File) Self {
     return .{
         .input_handle = input.handle,
         .fds = fds,
-        .in_reader = input.reader(),
+        .in_reader = input.reader(&stdin_buffer).interface,
     };
 }
 
@@ -129,8 +129,8 @@ pub fn printNibble(ch: u8, level: usize) void {
     std.debug.print("readByte::{d} c={c} x={x:3} d={d}\r\n", .{ level, pritt_c, ch, ch });
 }
 
-pub fn readByte(self: Self) !?u8 {
-    return self.in_reader.readByte() catch |err| switch (err) {
+pub fn readByte(self: *Self) !?u8 {
+    return self.in_reader.takeByte() catch |err| switch (err) {
         error.EndOfStream => null,
         else => return err,
     };
@@ -202,7 +202,7 @@ pub fn next(self: *Self) !Keys {
     };
 }
 
-fn parseCsi(self: Self) !Keys {
+fn parseCsi(self: *Self) !Keys {
     const c0 = try self.readByte();
     if (c0 == null) return .None;
     // printNibble(c0.?, 3);
@@ -221,7 +221,7 @@ fn parseCsi(self: Self) !Keys {
             return switch (c1.?) {
                 '0' => {
                     var buf = [4]u8{ 0, 0, 0, 0 };
-                    const rest = try self.in_reader.readAll(&buf);
+                    const rest = try self.in_reader.readSliceShort(&buf);
                     if (std.mem.eql(u8, "5;5u", buf[0..rest])) {
                         return Keys{ .Ctrl = 'i' };
                     }
