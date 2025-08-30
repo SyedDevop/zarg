@@ -158,12 +158,12 @@ pub const ComputedArgs = struct {
         return false;
     }
     pub fn append(self: *Self, arg: Arg) !void {
-        try self.data.append(arg);
+        try self.data.append(self.alloc, arg);
     }
 
-    pub fn deinit(self: Self) void {
+    pub fn deinit(self: *Self) void {
         for (self.data.items) |*item| if (item.is_alloc) try item.value.free(self.alloc);
-        self.data.deinit();
+        self.data.deinit(self.alloc);
     }
 };
 
@@ -238,7 +238,10 @@ pub fn CliInit(comptime CmdEnum: type) type {
                 .cmds = commands,
                 .running_cmd = commands[0],
                 .version = version,
-                .computed_args = .empty,
+                .computed_args = .{
+                    .data = .empty,
+                    .alloc = allocate,
+                },
             };
         }
 
@@ -374,12 +377,12 @@ pub fn CliInit(comptime CmdEnum: type) type {
                                 defer self.alloc.free(lower_value);
                                 _ = std.ascii.lowerString(lower_value, lower_value);
                                 copy_opt.value = .{ .bool = std.mem.eql(u8, lower_value, "true") };
-                                try self.computed_args.append(self.alloc, copy_opt);
+                                try self.computed_args.append(copy_opt);
                             },
                             .str => {
                                 copy_opt.is_alloc = true;
                                 copy_opt.value = .{ .str = try self.alloc.dupe(u8, kv_arg.value.?) };
-                                try self.computed_args.append(self.alloc, copy_opt);
+                                try self.computed_args.append(copy_opt);
                             },
                             .num => {
                                 const num = if (kv_arg.value) |v| std.fmt.parseInt(i32, v, 10) catch |e| switch (e) {
@@ -387,7 +390,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
                                     else => return e,
                                 } else opt.value.num.?;
                                 copy_opt.value = .{ .num = num };
-                                try self.computed_args.append(self.alloc, copy_opt);
+                                try self.computed_args.append(copy_opt);
                             },
                             .list => util.logLocMessage("TODO: List Not implemented", @src()),
                         }
@@ -413,7 +416,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
                             switch (opt.value) {
                                 .bool => {
                                     copy_opt.value = .{ .bool = true };
-                                    try self.computed_args.append(self.alloc, copy_opt);
+                                    try self.computed_args.append(copy_opt);
                                 },
                                 else => {
                                     if (j < short_flags.len - 1) {
@@ -432,7 +435,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
                                         .str => {
                                             copy_opt.is_alloc = true;
                                             copy_opt.value = .{ .str = try self.alloc.dupe(u8, kv_arg.value.?) };
-                                            try self.computed_args.append(self.alloc, copy_opt);
+                                            try self.computed_args.append(copy_opt);
                                         },
                                         .num => {
                                             const num = if (kv_arg.value) |v| std.fmt.parseInt(i32, v, 10) catch |e| switch (e) {
@@ -440,7 +443,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
                                                 else => return e,
                                             } else opt.value.num.?;
                                             copy_opt.value = .{ .num = num };
-                                            try self.computed_args.append(self.alloc, copy_opt);
+                                            try self.computed_args.append(copy_opt);
                                         },
                                         .list => util.logLocMessage("TODO: List Not implemented", @src()),
                                         .bool => unreachable,
@@ -596,8 +599,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
         }
 
         pub fn deinit(self: *Self) void {
-            for (self.computed_args.items) |*item| if (item.is_alloc) try item.value.free(self.alloc);
-            self.computed_args.deinit(self.alloc);
+            self.computed_args.deinit();
             self.deinitPosArgs();
             self.deinitRestArgs();
             self.alloc.free(self.executable_name);

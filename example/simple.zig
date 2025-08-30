@@ -160,8 +160,9 @@ pub fn main() !void {
 
     std.debug.print("{s}\n", .{body});
 
+    // const ss: [][]const u8 = &.{};
     std.debug.print("The Command is     |{t}|\n", .{cli.running_cmd.name});
-    std.debug.print("The Input is       |{?any}|\n", .{cli.pos_args});
+    std.debug.print("The Input is       |{?s}|\n", .{cli.pos_args});
     std.debug.print("The Rest Input is  |{?any}|\n", .{cli.rest_args});
     switch (cli.running_cmd.name) {
         .add => {
