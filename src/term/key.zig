@@ -113,24 +113,18 @@ pub const Keys = union(enum) {
 
 in_reader: *Reader,
 input_handle: Handle,
-fds: ?[1]pollfd = null,
+fds: [1]pollfd = .{.{
+    .fd = std.posix.STDIN_FILENO,
+    .events = std.posix.POLL.IN,
+    .revents = 0,
+}},
 
 pub fn init(input: *Reader, fd: Handle) !Self {
     if (input.buffer.len != 1) {
         std.debug.print("[Error] Keys.init: Input buffer length must be 1 (got {d})\r\n", .{input.buffer.len});
         return error.InvalidBufferSize;
     }
-
-    const fds: ?[1]pollfd = if (is_windows) null else .{pollfd{
-        .fd = fd,
-        .events = std.posix.POLL.IN,
-        .revents = 0,
-    }};
-    return .{
-        .input_handle = fd,
-        .fds = fds,
-        .in_reader = input,
-    };
+    return .{ .input_handle = fd, .in_reader = input };
 }
 
 pub fn printNibble(ch: u8, level: usize) void {
@@ -157,7 +151,7 @@ pub fn waitForInput(self: *Self, time: WaitTime) !usize {
             },
             else => 0,
         },
-        else => try std.posix.poll(&self.fds.?, time),
+        else => try std.posix.poll(&self.fds, time),
     };
 }
 
