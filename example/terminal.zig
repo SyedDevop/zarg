@@ -39,12 +39,25 @@ fn printVersion(version_call: Cli.VersionCallFrom) []const u8 {
         .help => "V1.0.0",
     };
 }
+
+// fn dumpList(list: []type) !void {
+//     const T = @TypeOf(list);
+//     switch (@typeInfo(T)) {
+//
+//
+//     }
+// }
+
 var print_log: bool = true;
 var stdout_buffer: [1024]u8 = undefined;
+var stdin_buffer: [1]u8 = undefined;
+
 pub fn main() !void {
     var stdout = std.fs.File.stdout();
+
     var sto_writer = stdout.writer(&stdout_buffer).interface;
     const stdin = std.fs.File.stdin();
+    var stdin_r = stdin.reader(&stdin_buffer);
     // const sti_writer = stdin.writer();
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -62,7 +75,7 @@ pub fn main() !void {
 
     const terminal = zarg.Term;
     const mouse = terminal.MouseMode{ .normal = true };
-    var keys = zarg.Keys.init(stdin);
+    var keys = try zarg.Keys.init(&stdin_r.interface, stdin.handle);
 
     var raw = try terminal.rawMode(stdin.handle);
     defer {
@@ -73,50 +86,52 @@ pub fn main() !void {
     try clear.all_move_curser_top(&sto_writer);
     const color = ZColor.Zcolor.init(allocator);
     _ = color;
-    try stdout.writeAll("Press Q or Ctr+q to quit \r\n");
+    try sto_writer.print("Press Q or Ctr+q to quit \r\n", .{});
     try sto_writer.print("{?any}\n\r", .{try terminal.getSize(stdout)});
+    try sto_writer.flush();
 
     try mouse.enableMouseEvent(&sto_writer);
     defer mouse.disableMouseEvent(&sto_writer) catch {};
 
     // var index: usize = 0;
     while (true) {
-        const key = try keys.next();
-        if (key == .Esc or
-            key.isKey('q') or
-            key.isKey('Q') or
-            key.isKey(0x11))
-        {
-            try sto_writer.print("\rBye!\n", .{});
-            return;
-        }
-        if (key.getChar()) |c| {
-            std.debug.print("{c}", .{c});
-        } else if (key == .Enter) {
-            std.debug.print("\r\n", .{});
-        } else if (key == .BackSpace) {
-            try clear.clearLeftChar(&sto_writer);
-        }
-        // switch (try keys.next()) {
-        //     .Char => |c| switch (c) {
-        //         'p' => print_log = print_log != true,
-        //         'c' => try zarg.Clear.all_move_curser_top(sto_writer),
-        //         'q', 'Q', 0x11 => { // Q key{
-        //             try sto_writer.print("\rBye!\n", .{});
-        //             return;
-        //         },
-        //         else => {
-        //             std.debug.print("{c}", .{c});
-        //         },
-        //     },
-        //     .Esc => {
-        //         try sto_writer.print("\rBye!\n", .{});
-        //         return;
-        //     },
-        //     .None => {},
-        //     else => |el| {
-        //         std.debug.print("{s}\r\n", .{@tagName(el)});
-        //     },
+        // const key = try keys.next();
+        // if (key == .Esc or
+        //     key.isKey('q') or
+        //     key.isKey('Q'))
+        // {
+        //     try sto_writer.print("\rBye!\n", .{});
+        //     try sto_writer.flush();
+        //     return;
         // }
+        // if (key.getChar()) |c| {
+        //     try sto_writer.print("{c}", .{c});
+        // } else if (key == .Enter) {
+        //     try sto_writer.print("\r\n", .{});
+        // } else if (key == .BackSpace) {
+        //     try clear.clearLeftChar(&sto_writer);
+        // }
+        switch (try keys.next()) {
+            .Char => |c| switch (c) {
+                'p' => print_log = print_log != true,
+                'c' => try zarg.Clear.all_move_curser_top(&sto_writer),
+                'q', 'Q', 0x11 => { // Q key{
+                    try sto_writer.print("\rBye!\n", .{});
+                    return;
+                },
+                else => {
+                    std.debug.print("{c}", .{c});
+                },
+            },
+            .Esc => {
+                try sto_writer.print("\rBye!\n", .{});
+                return;
+            },
+            .None => {},
+            else => |el| {
+                std.debug.print("{t}\r\n", .{el});
+            },
+        }
+        try sto_writer.flush();
     }
 }

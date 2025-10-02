@@ -5,10 +5,14 @@ const winU = @import("win_util.zig");
 const os = std.os;
 const win = os.windows;
 const winK = win.kernel32;
+
 const pollfd = std.posix.pollfd;
+const Handle = std.fs.File.Handle;
+const Reader = std.Io.Reader;
 
 const is_windows = builtin.os.tag == .windows;
 const Self = @This();
+
 pub const Keys = union(enum) {
     Char: u8,
     Ctrl: u8,
@@ -107,20 +111,25 @@ pub const Keys = union(enum) {
     }
 };
 
-in_reader: std.Io.Reader,
-input_handle: std.fs.File.Handle,
+in_reader: *Reader,
+input_handle: Handle,
 fds: ?[1]pollfd = null,
-var stdin_buffer: [1024]u8 = undefined;
-pub fn init(input: std.fs.File) Self {
-    const fds: ?[1]pollfd = if (is_windows) null else .{.{
-        .fd = input.handle,
+
+pub fn init(input: *Reader, fd: Handle) !Self {
+    if (input.buffer.len != 1) {
+        std.debug.print("[Error] Keys.init: Input buffer length must be 1 (got {d})\r\n", .{input.buffer.len});
+        return error.InvalidBufferSize;
+    }
+
+    const fds: ?[1]pollfd = if (is_windows) null else .{pollfd{
+        .fd = fd,
         .events = std.posix.POLL.IN,
         .revents = 0,
     }};
     return .{
-        .input_handle = input.handle,
+        .input_handle = fd,
         .fds = fds,
-        .in_reader = input.reader(&stdin_buffer).interface,
+        .in_reader = input,
     };
 }
 
@@ -157,7 +166,8 @@ pub fn next(self: *Self) !Keys {
     if (data == 0) return .None;
     const c0 = try self.readByte();
     if (c0 == null) return .None;
-    // printNibble(c0, 1);
+
+    // printNibble(c0.?, 1);
     return switch (c0.?) {
         '\x1b' => {
             if (try self.waitForInput(30) <= 0) return .Esc;
