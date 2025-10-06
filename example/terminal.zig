@@ -6,7 +6,7 @@ const win = os.windows;
 const winK = win.kernel32;
 const builtin = @import("builtin");
 const Cli = zarg.Cli;
-const ZColor = zarg.ZColor;
+const Style = zarg.Style;
 
 const is_windows = builtin.os.tag == .windows;
 
@@ -22,9 +22,9 @@ pub fn main() !void {
     var stdin_r = stdin.reader(&stdin_buffer);
     // const sti_writer = stdin.writer();
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
-    defer _ = gpa.deinit();
+    // var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    // const allocator = gpa.allocator();
+    // defer _ = gpa.deinit();
 
     const terminal = zarg.Term;
     const mouse = terminal.MouseMode{ .normal = true };
@@ -37,8 +37,6 @@ pub fn main() !void {
 
     const clear = zarg.Clear;
     try clear.allMoveCurserTop(&sto_writer);
-    const color = ZColor.Zcolor.init(allocator);
-    _ = color;
     try sto_writer.print("Press Q or Ctr+q to quit \r\n", .{});
     try sto_writer.print("{?any}\n\r", .{try terminal.getSize(stdout)});
     try sto_writer.flush();

@@ -2,7 +2,7 @@ const std = @import("std");
 const zarg = @import("zarg");
 
 const Cli = zarg.Cli;
-const Color = zarg.ZColor;
+const Style = zarg.Style;
 
 const USAGE =
     \\Example to use zarg
@@ -130,37 +130,40 @@ pub fn main() !void {
         try cli.printParseError(err);
         return;
     };
-    const color = Color.Zcolor.init(allocator);
-    var text: std.ArrayList(u8) = .empty;
-    defer text.deinit(allocator);
-    var text_w = text.writer(allocator);
+    // const color = Style.ZColor.init(allocator);
+    var text: std.Io.Writer.Allocating = .init(allocator);
+    defer text.deinit();
+    const text_w = &text.writer;
 
-    var header_style = Color.Style{
+    var stdout_io = std.fs.File.stdout().writer(&.{});
+    var stdout = &stdout_io.interface;
+
+    var header_style = Style{
         .fontStyle = .{
             .doublyUnderline = true,
             .italic = true,
         },
-        .fgColor = .toColor(245),
+        .fgColor = Style.BrightRed,
     };
 
-    try header_style.render("The Question is:\n", &text_w);
+    try header_style.render("The Question is:\n", text_w);
+    header_style.fgColor = Style.BrightGreen;
     header_style.fontStyle.bold = true;
     header_style.fontStyle.doublyUnderline = false;
     header_style.fontStyle.italic = false;
+    try header_style.render("The Answer is:  ", text_w);
+    try Style.Color.render(
+        "56_000",
+        Style.BrightMagenta,
+        null,
+        text_w,
+    );
 
-    try header_style.render("The Answer is:\n", &text_w);
-    std.debug.print("{s}\n", .{text.items});
+    const styled_text = try text.toOwnedSlice();
+    defer allocator.free(styled_text);
 
-    const body = try color.fmtRender("{d}", .{56_00}, .{
-        .fontStyle = .{ .bold = true, .crossedout = true },
-        .padding = .inLine(50, 0),
-        .fgColor = .toColor(50),
-    });
-    defer allocator.free(body);
+    try stdout.print("{s}\n", .{styled_text});
 
-    std.debug.print("{s}\n", .{body});
-
-    // const ss: [][]const u8 = &.{};
     std.debug.print("The Command is     |{t}|\n", .{cli.running_cmd.name});
     std.debug.print("The Input is       |{?any}|\n", .{cli.pos_args});
     std.debug.print("The Rest Input is  |{?any}|\n", .{cli.rest_args});
