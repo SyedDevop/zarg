@@ -36,7 +36,7 @@ pub fn main() !void {
     }
 
     const clear = zarg.Clear;
-    try clear.all_move_curser_top(&sto_writer);
+    try clear.allMoveCurserTop(&sto_writer);
     const color = ZColor.Zcolor.init(allocator);
     _ = color;
     try sto_writer.print("Press Q or Ctr+q to quit \r\n", .{});
@@ -65,24 +65,35 @@ pub fn main() !void {
         //     try clear.clearLeftChar(&sto_writer);
         // }
         switch (try keys.next()) {
+            .Ctrl => |ct| switch (ct) {
+                'c' => try zarg.Clear.allMoveCurserTop(&sto_writer),
+                else => {},
+            },
             .Char => |c| switch (c) {
                 'p' => print_log = print_log != true,
-                'c' => try zarg.Clear.all_move_curser_top(&sto_writer),
                 'q', 'Q', 0x11 => { // Q key{
                     try sto_writer.print("\rBye!\n", .{});
+                    try sto_writer.flush();
                     return;
                 },
                 else => {
-                    std.debug.print("{c}", .{c});
+                    try sto_writer.print("{c}", .{c});
                 },
+            },
+            .Enter => {
+                try sto_writer.print("\r\n", .{});
+            },
+            .BackSpace => {
+                try clear.clearLeftChar(&sto_writer);
             },
             .Esc => {
                 try sto_writer.print("\rBye!\n", .{});
+                try sto_writer.flush();
                 return;
             },
             .None => {},
             else => |el| {
-                std.debug.print("{t}\r\n", .{el});
+                try sto_writer.print("{t}\r\n", .{el});
             },
         }
         try sto_writer.flush();
