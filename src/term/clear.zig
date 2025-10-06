@@ -1,64 +1,71 @@
 //! Clear screen.
-//! Note: Clear doesn't move the cursor, so the cursor will stay at the same position,
-//! to move cursor check `Cursor`.
+//! API: small, self-documenting functions that write the corresponding
+//! CSI + sequence to the provided writer.
+//! Note: most "clear" operations DO NOT move the cursor. See `clearAllAndMoveTop`.
 
 const std = @import("std");
-const utils = @import("../utils.zig");
+const Writer = std.Io.Writer;
 
-pub const print = struct {
-    /// Clear from cursor until end of screen
-    pub const screen_from_cursor = utils.comptimeCsi("0J", .{});
+/// ANSI / terminal clear sequences (strings do NOT include the CSI prefix).
+/// These are the final fragments you append after the common CSI (`"\x1b["`).
+pub const csi = "\x1b[";
 
-    /// Clear from cursor to beginning of screen
-    pub const screen_to_cursor = utils.comptimeCsi("1J", .{});
+/// clear from cursor to end of screen
+pub const screen_from_cursor = "0J";
+/// clear from beginning of screen to cursor
+pub const screen_to_cursor = "1J";
+/// clear entire screen
+pub const screen_full = "2J";
 
-    /// Clear all screen
-    pub const all = utils.comptimeCsi("2J", .{});
+/// clear from cursor to end of line
+pub const line_from_cursor = "0K";
+/// clear from beginning of line to cursor
+pub const line_to_cursor = "1K";
+/// clear entire line
+pub const line_all = "2K";
 
-    /// Clear from cursor to end of line
-    pub const line_from_cursor = utils.comptimeCsi("0K", .{});
+/// A handy "backspace + space + backspace" sequence to erase the previous character.
+pub const left_char_erase = "\x08 \x08";
 
-    /// Clear start of line to the cursor
-    pub const line_to_cursor = utils.comptimeCsi("1K", .{});
-
-    /// Clear entire line
-    pub const line = utils.comptimeCsi("2K", .{});
-};
+/// Move cursor to top-left (row 1, column 1). Use with CSI prefix.
+pub const move_cursor_top = "H";
 
 /// Clear from cursor until end of screen
-pub fn screenFromCursor(writer: anytype) !void {
-    return std.fmt.format(writer, utils.csi ++ utils.clear_screen_from_cursor, .{});
+pub inline fn screenFromCursor(writer: *Writer) !void {
+    return std.fmt.format(writer, csi ++ screen_from_cursor, .{});
 }
 
 /// Clear from cursor to beginning of screen
-pub fn screenToCursor(writer: anytype) !void {
-    return std.fmt.format(writer, utils.csi ++ utils.clear_screen_to_cursor, .{});
+pub inline fn screenToCursor(writer: *Writer) !void {
+    return std.fmt.format(writer, csi ++ screen_to_cursor, .{});
 }
 
-pub fn clearLeftChar(writer: *std.Io.Writer) !void {
+/// Clear the left character Like:'Backspace'
+pub inline fn clearLeftChar(writer: *Writer) !void {
     return writer.writeAll("\x08 \x08");
 }
 
-/// Clear all screen
-pub fn all(writer: *std.Io.Writer) !void {
-    return writer.writeAll(utils.csi ++ utils.clear_all);
+/// Clear Full screen
+pub inline fn full(writer: *Writer) !void {
+    return writer.writeAll(csi ++ screen_full);
 }
 
-pub fn all_move_curser_top(writer: *std.Io.Writer) !void {
-    try all(writer);
-    return writer.writeAll(utils.csi ++ "H");
+/// Clear Full Screen and Move cursor to top-left (row 1, column 1).
+pub inline fn allMoveCurserTop(writer: *Writer) !void {
+    try full(writer);
+    return writer.writeAll(csi ++ move_cursor_top);
 }
 /// Clear from cursor to end of line
-pub fn line_from_cursor(writer: anytype) !void {
-    return std.fmt.format(writer, utils.csi ++ utils.clear_line_from_cursor, .{});
+pub inline fn lineFromCursor(writer: *Writer) !void {
+    return writer.writeAll(csi ++ line_from_cursor);
 }
 
 /// Clear start of line to the cursor
-pub fn line_to_cursor(writer: anytype) !void {
-    return std.fmt.format(writer, utils.csi ++ utils.clear_line_to_cursor, .{});
+pub inline fn lineToCursor(writer: *Writer) !void {
+    return writer.writeAll(csi ++ line_to_cursor);
 }
 
 /// Clear entire line
-pub fn entire_line(writer: anytype) !void {
-    return std.fmt.format(writer, utils.csi ++ utils.clear_line, .{});
+pub inline fn entireLine(writer: *Writer) !void {
+    return writer.writeAll(csi ++ line_all);
 }
