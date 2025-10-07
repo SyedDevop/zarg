@@ -78,14 +78,14 @@ pub fn shift(comptime T: type, xs: *[]T) !T {
 
 test "removeRange removes correct elements" {
     const allocator = std.testing.allocator;
-    var args = RawArgs.init(allocator);
-    defer args.deinit();
+    var args = RawArgs.empty;
+    defer args.deinit(allocator);
 
-    try args.append("arg0");
-    try args.append("arg1");
-    try args.append("arg2");
-    try args.append("arg3");
-    try args.append("arg4");
+    try args.append(allocator, "arg0");
+    try args.append(allocator, "arg1");
+    try args.append(allocator, "arg2");
+    try args.append(allocator, "arg3");
+    try args.append(allocator, "arg4");
 
     // Remove elements from index 1 (arg1, arg2)
     try removeRange(&args, 1, 2);
@@ -98,9 +98,9 @@ test "removeRange removes correct elements" {
 
 test "removeRangeSafe" {
     const allocator = std.testing.allocator;
-    var args = RawArgs.init(allocator);
-    defer args.deinit();
-    try args.appendSlice(&.{ "arg0", "arg1", "arg2", "arg3", "arg4" });
+    var args = RawArgs.empty;
+    defer args.deinit(allocator);
+    try args.appendSlice(allocator, &.{ "arg0", "arg1", "arg2", "arg3", "arg4" });
     // Remove elements from index 1 (arg1, arg2)
     try removeRangeSafe(&args, 3, 3);
     try std.testing.expectEqual(@as(usize, 3), args.items.len);
@@ -111,9 +111,9 @@ test "removeRangeSafe" {
 
 test "removeRangeInclusive" {
     const allocator = std.testing.allocator;
-    var args = RawArgs.init(allocator);
-    defer args.deinit();
-    try args.appendSlice(&.{ "arg0", "arg1", "arg2", "arg3", "arg4" });
+    var args = RawArgs.empty;
+    defer args.deinit(allocator);
+    try args.appendSlice(allocator, &.{ "arg0", "arg1", "arg2", "arg3", "arg4" });
     // Remove elements from index 1 (arg1, arg2)
     try removeRangeInclusive(&args, 2, 2);
     try std.testing.expectEqual(@as(usize, 2), args.items.len);
@@ -123,9 +123,9 @@ test "removeRangeInclusive" {
 
 test "removeRangeInclusiveSafe" {
     const allocator = std.testing.allocator;
-    var args = RawArgs.init(allocator);
-    defer args.deinit();
-    try args.appendSlice(&.{ "arg0", "arg1", "arg2", "arg3", "arg4" });
+    var args = RawArgs.empty;
+    defer args.deinit(allocator);
+    try args.appendSlice(allocator, &.{ "arg0", "arg1", "arg2", "arg3", "arg4" });
     // Remove elements from index 1 (arg1, arg2)
     try removeRangeInclusiveSafe(&args, 2, 3);
     try std.testing.expectEqual(@as(usize, 2), args.items.len);
