@@ -99,7 +99,7 @@ pub fn render(
     try writer.writeAll("\x1B[");
     if (fg) |f| {
         try Self.prepare(f, .fg, false, writer);
-        try writer.writeByte(';');
+        if (bg != null) try writer.writeByte(';');
     }
     if (bg) |b| {
         try Self.prepare(b, .bg, false, writer);
