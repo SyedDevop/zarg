@@ -113,7 +113,7 @@ pub const Keys = union(enum) {
 
 in_reader: *Reader,
 input_handle: Handle,
-fds: [1]pollfd = .{.{
+fds: ?[1]pollfd = if (is_windows) null else .{.{
     .fd = std.posix.STDIN_FILENO,
     .events = std.posix.POLL.IN,
     .revents = 0,
@@ -151,7 +151,7 @@ pub fn waitForInput(self: *Self, time: WaitTime) !usize {
             },
             else => 0,
         },
-        else => try std.posix.poll(&self.fds, time),
+        else => try std.posix.poll(&self.fds.?, time),
     };
 }
 
