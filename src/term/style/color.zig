@@ -139,16 +139,12 @@ pub fn render(
 ) !void {
     if (fg == null and bg == null) return;
     try writer.writeAll("\x1B[");
-    if (fg) |f| {
-        try Self.prepare(f, .fg, false, writer);
-        if (bg != null) try writer.writeByte(';');
-    }
-    if (bg) |b| {
-        try Self.prepare(b, .bg, false, writer);
-    }
-    try writer.writeByte('m');
-    try writer.writeAll(text);
-    try writer.writeAll("\x1B[0m");
+
+    if (fg) |f| try Self.prepare(f, .fg, false, writer);
+    if (bg != null and fg != null) try writer.writeByte(';');
+    if (bg) |b| try Self.prepare(b, .bg, false, writer);
+
+    try writer.print("m{s}\x1B[0m", .{text});
 }
 
 const testing = std.testing;
