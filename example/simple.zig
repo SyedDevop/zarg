@@ -159,6 +159,13 @@ pub fn main() !void {
         text_w,
     );
 
+    const this = Style.Color.renderComptime(
+        "Hello this is my",
+        Style.BrightBlack,
+        Style.White,
+    );
+    try stdout.print("{s}\n", .{this});
+
     const styled_text = try text.toOwnedSlice();
     defer allocator.free(styled_text);
 

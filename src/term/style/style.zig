@@ -205,64 +205,8 @@ pub fn reset(self: *Self) void {
 }
 
 const testing = std.testing;
-
-test "fg 8-bi" {
-    var buf: [100]u8 = undefined;
-    var fb = std.Io.Writer.fixed(&buf);
-    var new_style = Self{ .fgColor = .toAnsi4(1) };
-
-    try new_style.render("hello", &fb);
-    const expected = "\x1B[38;5;1mhello\x1B[0m";
-    try fb.flush();
-    const actual = buf[0..fb.end];
-
-    try testing.expectEqualSlices(u8, expected, actual);
-}
-
-test "fg 24-bit (rgb)" {
-    var buf: [100]u8 = undefined;
-    var fb = std.Io.Writer.fixed(&buf);
-    const style = Self{ .fgColor = .toRGB(1, 2, 3) };
-    try style.render("hello", &fb);
-
-    const expected: []const u8 = "\x1B[38;2;1;2;3mhello\x1B[0m";
-    try fb.flush();
-    const actual = buf[0..fb.end];
-    try testing.expectEqualSlices(u8, expected, actual);
-}
-
-test "bg 24-bit (rgb)" {
-    var buf: [100]u8 = undefined;
-    var fb = std.Io.Writer.fixed(&buf);
-    const style = Self{ .bgColor = .toRGB(10, 20, 30) };
-    try style.render("hello", &fb);
-
-    const expected: []const u8 = "\x1B[48;2;10;20;30mhello\x1B[0m";
-    try fb.flush();
-    const actual = buf[0..fb.end];
-    try testing.expectEqualSlices(u8, expected, actual);
-}
-
-test "combined fg/bg" {
-    var buf: [100]u8 = undefined;
-    var fb = std.Io.Writer.fixed(&buf);
-
-    const style = Self{
-        .bgColor = .toRGB(1, 1, 1),
-        .fgColor = .toAnsi8(2),
-    };
-
-    try style.render("hello", &fb);
-
-    // Some implementations emit two separate sequences, others combine into one. We accept both.
-    const expected1: []const u8 = "\x1B[38;5;2;48;2;1;1;1mhello\x1B[0m"; // combined (rare)
-    const expected2: []const u8 = "\x1B[38;5;2m\x1B[48;2;1;1;1mhello\x1B[0m"; // separate sequences
-
-    try fb.flush();
-    const actual = buf[0..fb.end];
-    if (!std.mem.eql(u8, actual, expected1) and !std.mem.eql(u8, actual, expected2)) {
-        try testing.expectEqualSlices(u8, expected1, actual); // will fail and print diff
-    }
+test {
+    _ = @import("color.zig");
 }
 
 test "no style (reset only)" {
@@ -276,36 +220,4 @@ test "no style (reset only)" {
     try fb.flush();
     const actual = buf[0..fb.end];
     try testing.expectEqualSlices(u8, expected, actual);
-}
-
-test "empty string" {
-    var buf: [1024]u8 = undefined;
-    var fb = std.Io.Writer.fixed(&buf);
-
-    const style = Self{ .fgColor = .toAnsi8(1) };
-    try style.render("", &fb);
-
-    const expected: []const u8 = "\x1B[38;5;1m\x1B[0m"; // just open and reset
-    try fb.flush();
-    const actual = buf[0..fb.end];
-    try testing.expectEqualSlices(u8, expected, actual);
-}
-
-test "unicode content" {
-    var buf: [1024]u8 = undefined;
-    var fb = std.Io.Writer.fixed(&buf);
-
-    const style = Self{ .fgColor = .toAnsi8(4) };
-    const msg = "héllø 🌍";
-    try style.render(msg, &fb);
-
-    const expectedPrefix: []const u8 = "\x1B[38;5;4m";
-    try fb.flush();
-    const actual = buf[0..fb.end];
-
-    // Expect prefix, suffix reset, and that the payload contains the UTF-8 bytes of msg
-    try testing.expectEqualSlices(u8, expectedPrefix, actual[0..expectedPrefix.len]);
-    try testing.expectEqualSlices(u8, "\x1B[0m", actual[actual.len - 4 .. actual.len]);
-    // Validate the middle payload equals the UTF-8 encoded msg
-    try testing.expectEqualSlices(u8, msg, actual[expectedPrefix.len .. actual.len - 4]);
 }
