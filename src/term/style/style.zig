@@ -176,7 +176,7 @@ pub fn render(self: *const Self, text: []const u8, writer: *Writer) !void {
     try self.padDownAndRight(writer);
 }
 
-pub fn fmtRender(self: *const Self, comptime text: []const u8, args: anytype, writer: anytype) !void {
+pub fn fmtRender(self: *const Self, comptime text: []const u8, args: anytype, writer: *Writer) !void {
     try self.padUpAndLeft(writer);
 
     try self.prepare(writer);
@@ -186,12 +186,12 @@ pub fn fmtRender(self: *const Self, comptime text: []const u8, args: anytype, wr
     try self.padDownAndRight(writer);
 }
 
-fn padUpAndLeft(self: *const Self, writer: anytype) !void {
+fn padUpAndLeft(self: *const Self, writer: *Writer) !void {
     if (self.padding.up > 0) try writer.print("\x1B[{d}B", .{self.padding.up});
     if (self.padding.left > 0) try writer.print("\x1B[{d}C", .{self.padding.left});
 }
 
-fn padDownAndRight(self: *const Self, writer: anytype) !void {
+fn padDownAndRight(self: *const Self, writer: *Writer) !void {
     if (self.padding.down > 0) try writer.print("\x1B[{d}B", .{self.padding.down});
     if (self.padding.right > 0) try writer.print("\x1B[{d}C", .{self.padding.right});
 }
