@@ -487,7 +487,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
                 try pos_list.appendSlice(self.alloc, pos_arg);
                 try pos_list.append(self.alloc, ' ');
             }
-            return try pos_list.toOwnedSlice();
+            return try pos_list.toOwnedSlice(self.alloc);
         }
 
         pub fn getStrArg(self: Self, arg_name: []const u8) !?[]const u8 {
