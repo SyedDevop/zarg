@@ -482,7 +482,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
 
         pub fn getAllPosArgAsStr(self: *const Self) !?[]const u8 {
             if (self.pos_args == null) return null;
-            var pos_list = std.ArrayList(u8).init(self.alloc);
+            var pos_list: std.ArrayList(u8) = .empty;
             for (self.pos_args.?) |pos_arg| {
                 try pos_list.appendSlice(self.alloc, pos_arg);
                 try pos_list.append(self.alloc, ' ');
