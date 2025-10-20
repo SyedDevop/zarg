@@ -1,10 +1,12 @@
+const std = @import("std");
 const Allocator = std.mem.Allocator;
+const eql = std.mem.eql;
 
 const slice = @import("slice.zig");
 const RawArgs = slice.RawArgs;
+
 const util = @import("utils.zig");
 
-const std = @import("std");
 //TODO: Create a proper error logger.
 //TODO: Check for Duplicate arguments.
 //TODO: Nested Subcommands
@@ -373,10 +375,16 @@ pub fn CliInit(comptime CmdEnum: type) type {
                         var copy_opt = opt;
                         switch (opt.value) {
                             .bool => {
-                                const lower_value = try self.alloc.dupe(u8, kv_arg.value.?);
-                                defer self.alloc.free(lower_value);
-                                _ = std.ascii.lowerString(lower_value, lower_value);
-                                copy_opt.value = .{ .bool = std.mem.eql(u8, lower_value, "true") };
+                                copy_opt.value = .{
+                                    .bool = if (kv_arg.value) |v| blk: {
+                                        const lower_v = try std.ascii.allocLowerString(self.alloc, v);
+                                        defer self.alloc.free(lower_v);
+                                        if (util.isTruthyStr(lower_v))
+                                            break :blk true
+                                        else
+                                            break :blk false;
+                                    } else true,
+                                };
                                 try self.computed_args.append(copy_opt);
                             },
                             .str => {
@@ -646,7 +654,6 @@ pub fn splitKeyValue(arg: []const u8) KeyValueArg {
 pub fn parseKVArg(cmds: []const []const u8) !KeyValueArg {
     if (cmds.len == 0) return error.EmptyArg;
     const startsWith = std.mem.startsWith;
-    const eql = std.mem.eql;
 
     var result = splitKeyValue(cmds[0]);
     if (cmds.len == 1 or result.value != null) return result;
