@@ -379,10 +379,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
                                     .bool = if (kv_arg.value) |v| blk: {
                                         const lower_v = try std.ascii.allocLowerString(self.alloc, v);
                                         defer self.alloc.free(lower_v);
-                                        if (util.isTruthyStr(lower_v))
-                                            break :blk true
-                                        else
-                                            break :blk false;
+                                        break :blk util.isTruthyStr(lower_v);
                                     } else true,
                                 };
                                 try self.computed_args.append(copy_opt);
