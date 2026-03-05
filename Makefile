@@ -6,6 +6,10 @@ zig:
 doc:buildDoc
 	python3 -m http.server 6969 -d "./zig-out/docs"
 
+.PHONY: test
+test:
+	zig build test --summary all --verbose
+
 .PHONY: buildDoc
 buildDoc:
 	zig build docs
