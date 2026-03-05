@@ -358,11 +358,11 @@ pub fn CliInit(comptime CmdEnum: type) type {
 
             const opts = self.running_cmd.options.?;
             const arg = args.items[0];
+            var found_arg = false;
 
             if (std.mem.startsWith(u8, arg, "--")) {
                 const kv_arg = try parseKVArg(args.items);
                 // try kError: The grouped fliv_arg.print();
-                var found_arg = false;
 
                 //TODO: Maybe this for loop can be a hash map.
                 for (opts) |opt| {
@@ -403,18 +403,12 @@ pub fn CliInit(comptime CmdEnum: type) type {
                         break;
                     }
                 }
-
-                if (!found_arg) {
-                    self.err_msg = try std.fmt.bufPrint(&self.err_msg_buf, "{s}", .{kv_arg.key});
-                    return CliParseError.UnknownOption;
-                }
             } else if (std.mem.startsWith(u8, arg, "-")) {
                 const short_flags = arg[1..];
                 var j: usize = 0;
 
                 while (j < short_flags.len) : (j += 1) {
                     const short_flag = short_flags[j .. j + 1];
-                    var found_arg = false;
                     for (opts) |opt| {
                         if (std.mem.eql(u8, opt.short[1..], short_flag)) {
                             var copy_opt = opt;
@@ -459,12 +453,12 @@ pub fn CliInit(comptime CmdEnum: type) type {
                             break;
                         }
                     }
-                    if (!found_arg) {
-                        self.err_msg = try std.fmt.bufPrint(&self.err_msg_buf, "-{s}", .{short_flag});
-                        return CliParseError.UnknownOption;
-                    }
                 }
                 try slice.removeRange(args, 0, 1);
+            }
+            if (!found_arg) {
+                self.err_msg = try std.fmt.bufPrint(&self.err_msg_buf, "{s}", .{arg});
+                return CliParseError.UnknownOption;
             }
         }
 
