@@ -400,8 +400,8 @@ pub fn CliInit(comptime CmdEnum: type) type {
                         switch (opt.value) {
                             .bool => {
                                 copy_opt.value = .{
-                                    .bool = if (kv_arg.value) |v| blk: {
-                                        const lower_v = try std.ascii.allocLowerString(self.alloc, v);
+                                    .bool = if (kv_arg.value != null and kv_arg.count == 0) blk: {
+                                        const lower_v = try std.ascii.allocLowerString(self.alloc, kv_arg.value.?);
                                         defer self.alloc.free(lower_v);
                                         break :blk util.isTruthyStr(lower_v);
                                     } else true,

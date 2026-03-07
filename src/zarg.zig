@@ -14,4 +14,5 @@ test {
     _ = @import("cmd.zig");
     _ = @import("slice.zig");
     _ = @import("term/style/style.zig");
+    _ = @import("cmd_test.zig");
 }
