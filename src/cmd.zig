@@ -52,8 +52,12 @@ const VersionType = union(enum) {
 };
 
 pub const Arg = struct {
-    long: []const u8,
-    short: []const u8,
+    /// Long options are prefixed with two dashes
+    /// e.g., `--option`
+    long: ?[]const u8 = null,
+    /// Short options are single characters
+    /// e.g., `-o`
+    short: ?u8 = null,
     info: []const u8,
     value: ArgValue,
     //TODO : Do i need this,
@@ -71,14 +75,14 @@ pub const Arg = struct {
 
 const DEFAULT_ARGS = [2]Arg{
     .{
-        .long = "--help",
-        .short = "-h",
+        .long = "help",
+        .short = 'h',
         .info = "Show this help message and exit.",
         .value = ArgValue{ .bool = null },
     },
     .{
-        .long = "--version",
-        .short = "-v",
+        .long = "version",
+        .short = 'v',
         .info = "Print version information and exit.",
         .value = ArgValue{ .bool = null },
     },
@@ -122,7 +126,10 @@ pub const ComputedArgs = struct {
 
     pub fn getStrArg(self: Self, arg_name: []const u8) !?[]const u8 {
         for (self.data.items) |arg| {
-            if (std.mem.eql(u8, arg.long, arg_name) or std.mem.eql(u8, arg.short, arg_name)) {
+            const query_char = if (arg_name.len > 0) arg_name[0] else ' ';
+            if ((arg.long != null and std.mem.eql(u8, arg.long.?, arg_name)) or
+                (arg.short != null and arg.short.? == query_char))
+            {
                 if (arg.value != .str) {
                     return error.ArgIsNotStr;
                 }
@@ -134,7 +141,10 @@ pub const ComputedArgs = struct {
 
     pub fn getNumArg(self: Self, arg_name: []const u8) !?i32 {
         for (self.data.items) |arg| {
-            if (std.mem.eql(u8, arg.long, arg_name) or std.mem.eql(u8, arg.short, arg_name)) {
+            const query_char = if (arg_name.len > 0) arg_name[0] else ' ';
+            if ((arg.long != null and std.mem.eql(u8, arg.long.?, arg_name)) or
+                (arg.short != null and arg.short.? == query_char))
+            {
                 if (arg.value != .num) {
                     return error.ArgIsNotNum;
                 }
@@ -146,7 +156,10 @@ pub const ComputedArgs = struct {
 
     pub fn getBoolArg(self: Self, arg_name: []const u8) !bool {
         for (self.data.items) |arg| {
-            if (std.mem.eql(u8, arg.long, arg_name) or std.mem.eql(u8, arg.short, arg_name)) {
+            const query_char = if (arg_name.len > 0) arg_name[0] else ' ';
+            if ((arg.long != null and std.mem.eql(u8, arg.long.?, arg_name)) or
+                (arg.short != null and arg.short.? == query_char))
+            {
                 if (arg.value != .bool) {
                     return error.ArgIsNotBool;
                 }
@@ -219,6 +232,17 @@ pub fn CliInit(comptime CmdEnum: type) type {
         ) !Self {
             comptime {
                 if (commands.len <= 0) @compileError("You need to provided At list one command.");
+                for (commands) |cmd| {
+                    if (cmd.options) |opts| for (opts, 0..) |opt, i| {
+                        if (opt.long == null and opt.short == null) {
+                            const message = std.fmt.comptimePrint(
+                                "Invalid option #{d} in command '{t}':  must define at least one flag (short or long).",
+                                .{ i + 1, cmd.name },
+                            );
+                            @compileError(message);
+                        }
+                    };
+                }
                 const enum_fields = @typeInfo(CmdEnum).@"enum".fields;
                 for (enum_fields) |field| {
                     var found = false;
@@ -260,8 +284,8 @@ pub fn CliInit(comptime CmdEnum: type) type {
             max.cmd = @max(max.cmd, @tagName(cmd.name).len);
             if (cmd.options) |opts| {
                 for (opts) |op| {
-                    max.long = @max(max.long, op.long.len);
-                    max.short = @max(max.short, op.short.len);
+                    if (op.long == null) continue;
+                    max.long = @max(max.long, op.long.?.len);
                     max.info = @max(max.info, op.info.len);
                 }
             }
@@ -362,11 +386,11 @@ pub fn CliInit(comptime CmdEnum: type) type {
 
             if (std.mem.startsWith(u8, arg, "--")) {
                 const kv_arg = try parseKVArg(args.items);
-                // try kError: The grouped fliv_arg.print();
+                // try kv_arg.print();
 
                 //TODO: Maybe this for loop can be a hash map.
                 for (opts) |opt| {
-                    if (std.mem.eql(u8, opt.long, kv_arg.key)) {
+                    if (opt.long != null and std.mem.eql(u8, opt.long.?, kv_arg.key[2..])) {
                         if (kv_arg.value == null and opt.value != .bool and opt.value.isNull()) {
                             self.err_msg = try std.fmt.bufPrint(&self.err_msg_buf, "{s}", .{kv_arg.key});
                             return CliParseError.ValueRequired;
@@ -408,9 +432,9 @@ pub fn CliInit(comptime CmdEnum: type) type {
                 var j: usize = 0;
 
                 while (j < short_flags.len) : (j += 1) {
-                    const short_flag = short_flags[j .. j + 1];
+                    const short_flag: u8 = short_flags[j];
                     for (opts) |opt| {
-                        if (std.mem.eql(u8, opt.short[1..], short_flag)) {
+                        if (opt.short != null and opt.short.? == short_flag) {
                             var copy_opt = opt;
                             switch (opt.value) {
                                 .bool => {
@@ -419,7 +443,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
                                 },
                                 else => {
                                     if (j < short_flags.len - 1) {
-                                        self.err_msg = try std.fmt.bufPrint(&self.err_msg_buf, "'-{s}' is invalid — the flag '{s}'", .{ short_flags, opt.short });
+                                        self.err_msg = try std.fmt.bufPrint(&self.err_msg_buf, "'-{s}' is invalid — the flag '-{c}'", .{ short_flags, opt.short orelse ' ' });
                                         return CliParseError.NumberStringGroupedFlagInLast;
                                     }
 
@@ -536,34 +560,31 @@ pub fn CliInit(comptime CmdEnum: type) type {
         }
 
         fn generateArgsPrintFmt(self: Self, cmd: *const CmdT) ![]const u8 {
-            var cmd_fmt: std.ArrayList(u8) = .empty;
-            var cmd_writer = cmd_fmt.writer(self.alloc);
+            var cmd_fmt: std.Io.Writer.Allocating = try .initCapacity(self.alloc, 1024);
+            var cmd_writer = &cmd_fmt.writer;
             const max = maxStrLens(cmd);
             if (cmd.options) |opt| {
                 for (opt) |value| {
-                    for (0..max.short - value.short.len) |_| try cmd_fmt.append(self.alloc, ' ');
-                    try cmd_fmt.appendSlice(self.alloc, value.short);
-                    try cmd_fmt.appendSlice(self.alloc, ", ");
-                    for (0..max.long - value.long.len) |_| try cmd_fmt.append(self.alloc, ' ');
-                    try cmd_fmt.appendSlice(self.alloc, value.long);
-                    try cmd_writer.print(" {s:6}", .{value.getValueType()});
-                    for (0..(2)) |_| try cmd_fmt.append(self.alloc, ' ');
-                    try cmd_fmt.appendSlice(self.alloc, value.info);
-                    try cmd_fmt.append(self.alloc, '\n');
+                    if (value.short) |sf| try cmd_writer.print(" -{c},", .{sf}) else try cmd_writer.print("    ", .{});
+                    if (value.long) |lf| {
+                        try cmd_writer.splatByteAll(' ', max.long - lf.len);
+                        try cmd_writer.print("--{s} {s:6}", .{ lf, value.getValueType() });
+                    } else try cmd_writer.splatByteAll(' ', max.long);
+                    for (0..(2)) |_| try cmd_writer.writeByte(' ');
+                    try cmd_writer.print("{s}\n", .{value.info});
                 }
             }
             for (DEFAULT_ARGS) |value| {
-                for (0..max.short - value.short.len) |_| try cmd_fmt.append(self.alloc, ' ');
-                try cmd_fmt.appendSlice(self.alloc, value.short);
-                try cmd_fmt.appendSlice(self.alloc, ", ");
-                for (0..max.long - value.long.len) |_| try cmd_fmt.append(self.alloc, ' ');
-                try cmd_fmt.appendSlice(self.alloc, value.long);
-                try cmd_writer.print(" {s:6}", .{value.getValueType()});
-                for (0..(2)) |_| try cmd_fmt.append(self.alloc, ' ');
-                try cmd_fmt.appendSlice(self.alloc, value.info);
-                try cmd_fmt.append(self.alloc, '\n');
+                if (value.short) |sf| try cmd_writer.print(" -{c},", .{sf}) else try cmd_writer.print("    ", .{});
+                if (value.long) |lf| {
+                    try cmd_writer.splatByteAll(' ', max.long - lf.len);
+                    try cmd_writer.print("--{s} {s:6}", .{ lf, value.getValueType() });
+                } else try cmd_writer.splatByteAll(' ', max.long);
+
+                for (0..(2)) |_| try cmd_writer.writeByte(' ');
+                try cmd_writer.print("{s}\n", .{value.info});
             }
-            return try cmd_fmt.toOwnedSlice(self.alloc);
+            return try cmd_fmt.toOwnedSlice();
         }
 
         fn generateCmdPrintFmt(self: Self) ![]const u8 {

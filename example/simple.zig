@@ -16,8 +16,8 @@ const xmd = [_]CmdType{
         .usage = " [OPTIONS] \"EXPRESSION\"",
         .options = &.{
             .{
-                .long = "--print",
-                .short = "-p",
+                .long = "print",
+                .short = 'p',
                 .info = "Prints the result of the expression.",
                 .value = .{ .str = null },
             },
@@ -31,56 +31,55 @@ const xmd = [_]CmdType{
         .min_pos_arg = 1,
         .options = &.{
             .{
-                .long = "--a",
-                .short = "-a",
+                .long = "a",
                 .info = "",
                 .value = .{ .num = null },
             },
             .{
-                .long = "--b",
-                .short = "-b",
+                .long = "b",
+                .short = 'b',
                 .info = "",
                 .value = .{ .num = null },
             },
             .{
-                .long = "--c",
-                .short = "-c",
+                .long = "c",
+                .short = 'c',
                 .info = "",
                 .value = .{ .num = 10 },
             },
             .{
-                .long = "--path",
-                .short = "-p",
+                .long = "path",
+                .short = 'p',
                 .info = "Prints the the path to the executable.",
                 .value = .{ .bool = null },
             },
             .{
-                .long = "--eee",
-                .short = "-e",
+                .long = "eee",
+                .short = 'e',
                 .info = "Prints the result of the expression.",
                 .value = .{ .bool = null },
             },
             .{
-                .long = "--fffff",
-                .short = "-f",
+                .long = "fffff",
+                .short = 'f',
                 .info = "Prints the result of the expression.",
                 .value = .{ .bool = null },
             },
             .{
-                .long = "--ggggg",
-                .short = "-g",
+                .long = "ggggg",
+                .short = 'g',
                 .info = "Prints the result of the expression.",
                 .value = .{ .bool = null },
             },
             .{
-                .long = "--o",
-                .short = "-o",
+                .long = "o",
+                .short = 'o',
                 .info = "Prints the result of the expression.",
                 .value = .{ .str = null },
             },
             .{
-                .long = "--l",
-                .short = "-l",
+                .long = "l",
+                .short = 'l',
                 .info = "",
                 .value = .{ .list = null },
             },
@@ -93,9 +92,9 @@ const xmd = [_]CmdType{
         .info = "List the names of the directories in the current directory.",
         .options = &.{
             .{
-                .long = "--print",
-                .short = "-p",
-                .info = "PPrints the result of the expression.Prints the result of the expression.Prints the result of the expression.rints the result of the expression.",
+                .long = "print",
+                .short = 'p',
+                .info = "Prints the result of the expression.Prints the result of the expression.Prints the result of the expression.rints the result of the expression.",
                 .value = .{ .str = null },
             },
         },
@@ -187,10 +186,10 @@ pub fn main() !void {
             }
             for (cli.computed_args.data.items) |v| {
                 switch (v.value) {
-                    .str => |s| std.debug.print("<str > Computed args V:{?s} L:{s} S:{s} \n", .{ s, v.long, v.short }),
-                    .bool => |bo| std.debug.print("<bool> Computed args V:{?any}  L:{s} S:{s} \n", .{ bo, v.long, v.short }),
-                    .num => |n| std.debug.print("<num > Computed args V:{?d} L:{s} S:{s} \n", .{ n, v.long, v.short }),
-                    .list => |l| std.debug.print("<list> Computed args V:{?any} L:{s} S:{s} \n", .{ l, v.long, v.short }),
+                    .str => |s| std.debug.print("<str > Computed args V:{?s} L:{s} S:{c} \n", .{ s, v.long orelse " ", v.short orelse ' ' }),
+                    .bool => |bo| std.debug.print("<bool> Computed args V:{?any}  L:{s} S:{c} \n", .{ bo, v.long orelse " ", v.short orelse ' ' }),
+                    .num => |n| std.debug.print("<num > Computed args V:{?d} L:{s} S:{c} \n", .{ n, v.long orelse " ", v.short orelse ' ' }),
+                    .list => |l| std.debug.print("<list> Computed args V:{?any} L:{s} S:{c} \n", .{ l, v.long orelse " ", v.short orelse ' ' }),
                 }
             }
             std.debug.print("The Command is add(a:{d}, b:{d}, c:{d})  {d}\n", .{ a, b, c, a + b + c });
