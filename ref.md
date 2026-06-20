@@ -3,3 +3,5 @@
 <https://github.com/BitlyTwiser/snek>
 
 <https://github.com/xcaeser/zli>
+
+<https://github.com/galactixx/comphash>

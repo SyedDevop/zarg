@@ -1,13 +1,19 @@
 # zarg
 
+<!--toc:start-->
+
+- [zarg](#zarg)
+  - [Installation](#installation)
+  - [Usage](#usage)
+  <!--toc:end-->
+
 **_zarg_** is pure Zig library for low-level terminal manipulation.
 
 > [!WARNING]
 > This library is a WIP and may have breaking changes and bugs.
+> Tested with zig version `0.16.0`
 
-> Tested with zig version `0.13.0`
-
-## Including zarg in your project
+## Installation
 
 First we add the library as a dependency in our `build.zig.zon` file with the
 following command.
@@ -19,13 +25,15 @@ zig fetch --save git+https://github.com/SyedDevop/zarg
 And we add it to `build.zig` file.
 
 ```zig
-const mibu_dep = b.dependency("zarg", .{
+const zarg_dep = b.dependency("zarg", .{
     .target = target,
     .optimize = optimize,
 });
 
-exe.root_module.addImport("zarg", mibu_dep.module("zarg"));
+exe.root_module.addImport("zarg", zarg_dep.module("zarg"));
 ```
+
+## Usage
 
 Now we can use the library in our code.
 
