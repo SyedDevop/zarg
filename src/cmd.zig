@@ -1,5 +1,8 @@
 const std = @import("std");
+const Args = std.process.Args;
 const Allocator = std.mem.Allocator;
+const Io = std.Io;
+const Writer = Io.Writer;
 const eql = std.mem.eql;
 
 const slice = @import("slice.zig");
@@ -295,7 +298,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
         /// This function return formatted Error message for CliParseError.
         ///
         /// @import you need to Free the message your self.
-        pub fn getErrorMessage(self: *const Self, err: anyerror) !?[]u8 {
+        pub fn getErrorMessage(self: *const Self, err: anyerror, w: *Writer) !?[]u8 {
             return switch (err) {
                 CliParseError.InsufficientArguments => try std.fmt.allocPrint(self.alloc, "Not enough arguments provided. Please check the command usage.", .{}),
                 CliParseError.ValueRequired => try std.fmt.allocPrint(self.alloc, "A value is required for option '{s}'.", .{self.err_msg}),
@@ -311,7 +314,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
                     return null;
                 },
                 CliParseError.ShowHelp => {
-                    try self.help();
+                    try self.help(w);
                     return null;
                 },
 
@@ -319,17 +322,17 @@ pub fn CliInit(comptime CmdEnum: type) type {
             };
         }
 
-        pub fn printParseError(self: *const Self, err: anyerror) !void {
-            if (try self.getErrorMessage(err)) |message| {
+        pub fn printParseError(self: *const Self, err: anyerror, w: *Writer) !void {
+            if (try self.getErrorMessage(err, w)) |message| {
                 defer self.alloc.free(message);
                 std.debug.print("\x1B[1;38;5;197m[Error]: \x1B[0m{s}\n\n \x1B[0m", .{message});
-                if (self.running_cmd.print_help_for_min_pos_arg) try self.help();
+                if (self.running_cmd.print_help_for_min_pos_arg) try self.help(w);
             }
         }
 
-        pub fn parse(self: *Self) !void {
-            const args = try std.process.argsAlloc(self.alloc);
-            defer std.process.argsFree(self.alloc, args);
+        pub fn parse(self: *Self, args: []const []const u8) !void {
+            // const args = try std.process.argsAlloc(self.alloc);
+            // defer std.process.argsFree(self.alloc, args);
 
             var argList = try RawArgs.initCapacity(self.alloc, args.len);
             defer argList.deinit(self.alloc);
@@ -525,8 +528,8 @@ pub fn CliInit(comptime CmdEnum: type) type {
             return self.computed_args.getBoolArg(arg_name);
         }
 
-        pub fn help(self: Self) !void {
-            const stdout = std.fs.File.stdout().deprecatedWriter();
+        pub fn help(self: Self, w: *Writer) !void {
+            const stdout = w;
             if (self.description) |dis| {
                 const version = switch (self.version) {
                     .str => |s| s,

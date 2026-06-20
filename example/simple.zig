@@ -116,26 +116,25 @@ fn printVersion(version_call: Cli.VersionCallFrom) []const u8 {
     };
 }
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
-    defer _ = gpa.deinit();
-
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
     var cli = try Cli.CliInit(UserCmd)
         .init(allocator, "Z Sim", USAGE, .{ .fun = &printVersion }, &xmd);
     defer cli.deinit();
+    const args = try init.minimal.args.toSlice(allocator);
+    defer allocator.free(args);
 
-    cli.parse() catch |err| {
-        try cli.printParseError(err);
+    var stdout_io = std.Io.File.stdout().writer(init.io, &.{});
+    var stdout = &stdout_io.interface;
+
+    cli.parse(args) catch |err| {
+        try cli.printParseError(err, stdout);
         return;
     };
     // const color = Style.ZColor.init(allocator);
     var text: std.Io.Writer.Allocating = .init(allocator);
     defer text.deinit();
     const text_w = &text.writer;
-
-    var stdout_io = std.fs.File.stdout().writer(&.{});
-    var stdout = &stdout_io.interface;
 
     var header_style = Style{
         .fontStyle = .{

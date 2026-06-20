@@ -14,12 +14,12 @@ var print_log: bool = true;
 var stdout_buffer: [1024]u8 = undefined;
 var stdin_buffer: [1]u8 = undefined;
 
-pub fn main() !void {
-    var stdout = std.fs.File.stdout();
+pub fn main(init: std.process.Init) !void {
+    var stdout = std.Io.File.stdout();
 
-    var sto_writer = stdout.writer(&stdout_buffer).interface;
-    const stdin = std.fs.File.stdin();
-    var stdin_r = stdin.reader(&stdin_buffer);
+    var sto_writer = stdout.writer(init.io, &stdout_buffer).interface;
+    const stdin = std.Io.File.stdin();
+    var stdin_r = stdin.reader(init.io, &stdin_buffer);
     // const sti_writer = stdin.writer();
 
     // var gpa = std.heap.GeneralPurposeAllocator(.{}){};

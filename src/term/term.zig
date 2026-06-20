@@ -28,7 +28,7 @@ pub const RawTerm = struct {
     },
 
     /// The OS-specific file descriptor or file handle.
-    handle: std.fs.File.Handle,
+    handle: std.Io.File.Handle,
 
     const Self = @This();
 
@@ -123,7 +123,7 @@ pub const MouseMode = packed struct {
         // }
     }
 };
-const Handel = std.fs.File.Handle;
+const Handel = std.Io.File.Handle;
 pub fn rawMode(handel: Handel) !RawTerm {
     return switch (builtin.os.tag) {
         .windows => try rawModeWin(handel),
@@ -178,7 +178,7 @@ fn rawModeWin(fd: Handel) !RawTerm {
 /// getSize returns the visible dimensions of the given terminal.
 ///
 /// These dimensions don't include any scrollback buffer height.
-pub fn getSize(file: std.fs.File) !?TermSize {
+pub fn getSize(file: std.Io.File) !?TermSize {
     return switch (builtin.os.tag) {
         .windows => blk: {
             var buf: os.windows.CONSOLE_SCREEN_BUFFER_INFO = undefined;

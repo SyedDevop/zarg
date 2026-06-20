@@ -7,7 +7,7 @@ const win = os.windows;
 const winK = win.kernel32;
 
 const pollfd = std.posix.pollfd;
-const Handle = std.fs.File.Handle;
+const Handle = std.Io.File.Handle;
 const Reader = std.Io.Reader;
 
 const is_windows = builtin.os.tag == .windows;

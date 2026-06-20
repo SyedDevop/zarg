@@ -1,5 +1,5 @@
 const std = @import("std");
-const Writer = std.io.Writer;
+const Writer = std.Io.Writer;
 
 pub const Colors = union(enum) {
     /// 4-bit ANSI color (0–15).
