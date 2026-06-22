@@ -542,11 +542,11 @@ pub fn CliInit(comptime CmdEnum: type) type {
             try stdout.print("  {s} {s}\n\n", .{ std.fs.path.basename(self.executable_name), cmd_opt.usage });
             if (cmd_opt.info) |info| {
                 try stdout.print("INFO: \n", .{});
-                try stdout.print("  {s}\n\n", .{info});
+                try stdout.print("{s}\n\n", .{info});
             }
             if (cmd_opt.example) |ex| {
                 try stdout.print("EXAMPLE: \n", .{});
-                try stdout.print("  {s}\n\n", .{ex});
+                try stdout.print("{s}\n\n", .{ex});
             }
             try stdout.print("OPTIONS: \n", .{});
             const opt_print_fmt = try self.generateArgsPrintFmt(&cmd_opt);
@@ -560,6 +560,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
             const cmd_print_str = try self.generateCmdPrintFmt();
             defer self.alloc.free(cmd_print_str);
             try stdout.print("{s}\n\n", .{cmd_print_str});
+            try stdout.flush();
         }
 
         fn generateArgsPrintFmt(self: Self, cmd: *const CmdT) ![]const u8 {
