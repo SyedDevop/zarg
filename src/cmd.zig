@@ -552,14 +552,15 @@ pub fn CliInit(comptime CmdEnum: type) type {
             const opt_print_fmt = try self.generateArgsPrintFmt(&cmd_opt);
             defer self.alloc.free(opt_print_fmt);
             try stdout.print("{s}\n\n", .{opt_print_fmt});
-            // TODO: The cmds will be printed for root cmd the first.
-            // Change this in future when sub cmds are supported
-            if (cmd_opt.name != self.cmds[0].name) return;
-            try stdout.print("COMMANDS: \n", .{});
 
-            const cmd_print_str = try self.generateCmdPrintFmt();
-            defer self.alloc.free(cmd_print_str);
-            try stdout.print("{s}\n\n", .{cmd_print_str});
+            // TODO: The cmds will be printed for root cmd the first one.
+            // Change this in future when sub cmds are supported
+            if (self.cmds.len > 1) {
+                try stdout.print("COMMANDS: \n", .{});
+                const cmd_print_str = try self.generateCmdPrintFmt();
+                defer self.alloc.free(cmd_print_str);
+                try stdout.print("{s}\n\n", .{cmd_print_str});
+            }
             try stdout.flush();
         }
 
