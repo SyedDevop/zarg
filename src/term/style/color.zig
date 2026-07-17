@@ -131,6 +131,25 @@ pub fn renderComptime(
     });
 }
 
+pub fn renderComptimeFmt(
+    comptime fmt: []const u8,
+    args: anytype,
+    comptime fg: ?Colors,
+    comptime bg: ?Colors,
+) []const u8 {
+    std.debug.assert(fg != null or bg != null);
+    const fg_color: []const u8 = if (fg) |f| prepareComptime(f, .fg) else "";
+    comptime var bg_color: []const u8 = if (bg) |b| prepareComptime(b, .bg) else "";
+
+    if (bg != null and fg != null) {
+        bg_color = ";" ++ bg_color;
+    }
+
+    const color_prefix = std.fmt.comptimePrint("\x1B[{s}{s}m", .{ fg_color, bg_color });
+    const fmt_text = std.fmt.comptimePrint(args, fmt);
+    return std.fmt.comptimePrint("{s}{s}\x1B[0m", .{ color_prefix, fmt_text });
+}
+
 pub fn render(
     text: []const u8,
     fg: ?Colors,
@@ -145,6 +164,27 @@ pub fn render(
     if (bg) |b| try Self.prepare(b, .bg, false, writer);
 
     try writer.print("m{s}\x1B[0m", .{text});
+    try writer.flush();
+}
+
+pub fn renderFmt(
+    comptime fmt: []const u8,
+    args: anytype,
+    fg: ?Colors,
+    bg: ?Colors,
+    writer: *Writer,
+) !void {
+    if (fg == null and bg == null) return;
+    try writer.writeAll("\x1B[");
+
+    if (fg) |f| try Self.prepare(f, .fg, false, writer);
+    if (bg != null and fg != null) try writer.writeByte(';');
+    if (bg) |b| try Self.prepare(b, .bg, false, writer);
+
+    _ = try writer.write("m");
+    try writer.print(fmt, args);
+    _ = try writer.write("\x1B[0m");
+    try writer.flush();
 }
 
 const testing = std.testing;
