@@ -7,9 +7,9 @@ const eql = std.mem.eql;
 
 const slice = @import("slice.zig");
 const RawArgs = slice.RawArgs;
-
 const util = @import("utils.zig");
 
+const COMPLETION = @import("completions.zig");
 //TODO: Create a proper error logger.
 //TODO: Check for Duplicate arguments.
 //TODO: Nested Subcommands
@@ -487,6 +487,62 @@ pub fn CliInit(comptime CmdEnum: type) type {
                 self.err_msg = try std.fmt.bufPrint(&self.err_msg_buf, "{s}", .{arg});
                 return CliParseError.UnknownOption;
             }
+        }
+        pub const CompletionType = enum {
+            bash,
+            zsh,
+            fish,
+            windows,
+        };
+        pub fn getCompletion(
+            self: Self,
+            alloc: std.mem.Allocator,
+            comptime completion_type: CompletionType,
+        ) ![]u8 {
+            comptime {
+                if (completion_type != .bash) {
+                    const message = std.fmt.comptimePrint("CompletionType.{t} not implemented", .{completion_type});
+                    @compileError(message);
+                }
+            }
+            var default_args_io: std.Io.Writer.Allocating = .init(alloc);
+            defer default_args_io.deinit();
+            var default_args_w = &default_args_io.writer;
+            for (DEFAULT_ARGS, 0..) |ar, i| {
+                if (i > 0) try default_args_w.writeByte(' ');
+                try default_args_w.print("--{s} -{c}", .{ ar.long.?, ar.short.? });
+            }
+
+            var cmd_names_w_io: std.Io.Writer.Allocating = .init(alloc);
+            defer cmd_names_w_io.deinit();
+            var cmd_names_w = &cmd_names_w_io.writer;
+
+            var cmd_w_io: std.Io.Writer.Allocating = .init(alloc);
+            defer cmd_w_io.deinit();
+            var cmd_w = &cmd_w_io.writer;
+            for (self.cmds) |cmd| {
+                if (cmd.name == .root) {
+                    try cmd_w.writeAll("[\"root\"]=\"");
+                } else {
+                    const name = @tagName(cmd.name);
+                    try cmd_w.print("[\"{s}\"]=\"", .{name});
+                    try cmd_names_w.print("{s} ", .{name});
+                }
+
+                if (cmd.options) |opt| for (opt, 0..) |arg, i| {
+                    if (i != 0) try cmd_w.writeByte(' ');
+                    if (arg.long) |l| try cmd_w.print("--{s}", .{l});
+                    if (arg.short) |s| try cmd_w.print(" -{c}", .{s});
+                };
+                try cmd_w.writeAll("\"\n      ");
+            }
+            const name = std.fs.path.basename(self.executable_name);
+            return try std.fmt.allocPrint(alloc, COMPLETION.BASH_AUTOCOMPLETION, .{
+                .name = name,
+                .opts = cmd_names_w.buffered(),
+                .global_flags = default_args_w.buffered(),
+                .cmd_opts = cmd_w.buffered(),
+            });
         }
 
         fn getCmd(self: Self, cmd: ?CmdEnum) CmdT {

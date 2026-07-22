@@ -25,6 +25,13 @@ const xmd = [_]CmdType{
         .min_arg = 0,
     },
     CmdType{
+        .name = .completion,
+        .min_arg = 0,
+        .usage = "simple completion",
+        .info = "This command Generate the autocompletion script for bash",
+        .options = null,
+    },
+    CmdType{
         .name = .add,
         .usage = " [OPTIONS] \"EXPRESSION\"",
         .info = "Add two numbers.",
@@ -107,6 +114,7 @@ pub const UserCmd = enum {
     add,
     remove,
     list,
+    completion,
 };
 
 fn printVersion(version_call: Cli.VersionCallFrom) []const u8 {
@@ -119,7 +127,7 @@ fn printVersion(version_call: Cli.VersionCallFrom) []const u8 {
 pub fn main(init: std.process.Init) !void {
     const allocator = init.gpa;
     var cli = try Cli.CliInit(UserCmd)
-        .init(allocator, "Z Sim", USAGE, .{ .fun = &printVersion }, &xmd);
+        .init(allocator, "ZSim", USAGE, .{ .fun = &printVersion }, &xmd);
     defer cli.deinit();
     const args = try init.minimal.args.toSlice(allocator);
     defer allocator.free(args);
@@ -192,6 +200,11 @@ pub fn main(init: std.process.Init) !void {
                 }
             }
             std.debug.print("The Command is add(a:{d}, b:{d}, c:{d})  {d}\n", .{ a, b, c, a + b + c });
+        },
+        .completion => {
+            const bash = try cli.getCompletion(allocator, .fish);
+            defer allocator.free(bash);
+            std.debug.print("{s}\n", .{bash});
         },
         else => {},
     }
