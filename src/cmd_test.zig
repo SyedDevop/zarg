@@ -81,12 +81,9 @@ fn createTestCli(allocator: Allocator) !CliInit(TestCmd) {
 }
 
 test "CliInit creates CLI with correct defaults" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
-
     const args = &[_][]const u8{"test-app"};
     var raw_args = try RawArgs.initCapacity(alloc, args.len);
     try raw_args.appendSlice(alloc, args);
@@ -99,9 +96,7 @@ test "CliInit creates CLI with correct defaults" {
 }
 
 test "parseAllArgs with no arguments returns root command" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -117,9 +112,7 @@ test "parseAllArgs with no arguments returns root command" {
 }
 
 test "parseAllArgs parses subcommand" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -135,9 +128,7 @@ test "parseAllArgs parses subcommand" {
 }
 
 test "parseAllArgs parses positional arguments" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -155,9 +146,7 @@ test "parseAllArgs parses positional arguments" {
 }
 
 test "parseAllArgs parses long option with value" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -175,9 +164,7 @@ test "parseAllArgs parses long option with value" {
 }
 
 test "parseAllArgs parses long option with equals sign" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -194,9 +181,7 @@ test "parseAllArgs parses long option with equals sign" {
 }
 
 test "parseAllArgs parses short option with value" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -213,9 +198,7 @@ test "parseAllArgs parses short option with value" {
 }
 
 test "parseAllArgs parses short boolean option" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -232,9 +215,7 @@ test "parseAllArgs parses short boolean option" {
 }
 
 test "parseAllArgs parses long boolean option" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -251,9 +232,7 @@ test "parseAllArgs parses long boolean option" {
 }
 
 test "parseAllArgs parses numeric option" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -270,9 +249,7 @@ test "parseAllArgs parses numeric option" {
 }
 
 test "parseAllArgs parses combined short options" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -291,9 +268,7 @@ test "parseAllArgs parses combined short options" {
 }
 
 test "parseAllArgs returns error for unknown option" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -308,9 +283,7 @@ test "parseAllArgs returns error for unknown option" {
 }
 
 test "parseAllArgs returns error when value required but not provided" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -325,9 +298,7 @@ test "parseAllArgs returns error when value required but not provided" {
 }
 
 test "parseAllArgs returns error for insufficient positional args" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     const test_commands_local = [_]cmd.Cmd(TestCmd){
         .{
@@ -365,9 +336,7 @@ test "parseAllArgs returns error for insufficient positional args" {
 }
 
 test "parseAllArgs parses rest args after --" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -387,9 +356,7 @@ test "parseAllArgs parses rest args after --" {
 }
 
 test "parseAllArgs with help option returns ShowHelp error" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -404,9 +371,7 @@ test "parseAllArgs with help option returns ShowHelp error" {
 }
 
 test "parseAllArgs with short help option returns ShowHelp error" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -421,9 +386,7 @@ test "parseAllArgs with short help option returns ShowHelp error" {
 }
 
 test "parseAllArgs with version option returns ShowVersion error" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -438,9 +401,7 @@ test "parseAllArgs with version option returns ShowVersion error" {
 }
 
 test "parseAllArgs with short version option returns ShowVersion error" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -455,9 +416,7 @@ test "parseAllArgs with short version option returns ShowVersion error" {
 }
 
 test "getPosArg returns null for out of bounds index" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -475,9 +434,7 @@ test "getPosArg returns null for out of bounds index" {
 }
 
 test "getAllPosArgAsStr concatenates all positional arguments" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -516,9 +473,7 @@ test "ArgValue isNull returns false for non-null values" {
 }
 
 test "getStrArg returns error for non-string argument" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -535,9 +490,7 @@ test "getStrArg returns error for non-string argument" {
 }
 
 test "getNumArg returns error for non-numeric argument" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -554,9 +507,7 @@ test "getNumArg returns error for non-numeric argument" {
 }
 
 test "deinit properly frees allocated memory" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     {
         var cli = try createTestCli(alloc);
@@ -570,9 +521,7 @@ test "deinit properly frees allocated memory" {
 }
 
 test "parseAllArgs handles command without options" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -590,9 +539,7 @@ test "parseAllArgs handles command without options" {
 }
 
 test "parseAllArgs with invalid subcommand defaults to root" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -608,9 +555,7 @@ test "parseAllArgs with invalid subcommand defaults to root" {
 }
 
 test "multiple positional arguments are all accessible" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
@@ -631,9 +576,7 @@ test "multiple positional arguments are all accessible" {
 }
 
 test "parseAllArgs with only positional arguments on root" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const alloc = gpa.allocator();
+    const alloc = std.testing.allocator;
 
     var cli = try createTestCli(alloc);
     defer cli.deinit();
