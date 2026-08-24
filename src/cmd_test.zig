@@ -98,6 +98,25 @@ fn createArgs(alloc: Allocator, args: []const []const u8) !RawArgs {
     return raw_args;
 }
 
+test "default value is correctly updated when argument is provided" {
+    const alloc = std.testing.allocator;
+
+    var raw_args = try createArgs(alloc, &.{ "test-app", "add", "--message", "This is the new Message", "-p" });
+    defer raw_args.deinit(alloc);
+
+    var cli = try createTestCli(alloc);
+    defer cli.deinit();
+    try cli.parseAllArgs(&raw_args);
+
+    const message = try cli.getStrArg("message");
+    try std.testing.expect(message != null);
+    try std.testing.expectEqualStrings("This is the new Message", message.?);
+
+    const print = try cli.getBoolArgOrNull("print");
+    try std.testing.expect(print != null);
+    try std.testing.expectEqual(true, print);
+}
+
 test "check string value is set correctly for default values" {
     const alloc = std.testing.allocator;
 
