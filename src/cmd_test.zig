@@ -13,6 +13,7 @@ const ArgValue = cmd.ArgValue;
 const ComputedArgs = cmd.ComputedArgs;
 const RawArgs = @import("slice.zig").RawArgs;
 
+const MESSAGE = "Got this message";
 const TestCmd = enum {
     root,
     add,
@@ -57,6 +58,12 @@ const TestCommands = [_]cmd.Cmd(TestCmd){
                 .info = "Print result",
                 .value = .{ .bool = false },
             },
+            .{
+                .long = "message",
+                .short = 'm',
+                .info = "This is message.",
+                .value = .{ .str = MESSAGE },
+            },
         },
         .min_arg = 0,
     },
@@ -89,6 +96,21 @@ fn createArgs(alloc: Allocator, args: []const []const u8) !RawArgs {
     var raw_args = try RawArgs.initCapacity(alloc, args.len);
     try raw_args.appendSlice(alloc, args);
     return raw_args;
+}
+
+test "check string value is set correctly for default values" {
+    const alloc = std.testing.allocator;
+
+    var raw_args = try createArgs(alloc, &.{ "test-app", "add" });
+    defer raw_args.deinit(alloc);
+
+    var cli = try createTestCli(alloc);
+    defer cli.deinit();
+    try cli.parseAllArgs(&raw_args);
+
+    const message = try cli.getStrArg("message");
+    try std.testing.expect(message != null);
+    try std.testing.expectEqualStrings(MESSAGE, message.?);
 }
 
 test "uses default values when arguments are omitted" {

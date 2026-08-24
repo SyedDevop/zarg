@@ -74,6 +74,36 @@ pub const Arg = struct {
             .bool => "",
         };
     }
+
+    pub fn isEqual(self: Arg, other: Arg) bool {
+        const long_not_null = self.long != null and other.long != null;
+        const short_not_null = self.short != null and other.short != null;
+
+        if (long_not_null and short_not_null) {
+            return eql(u8, self.long.?, other.long.?) and (self.short.? == other.short.?);
+        } else if (long_not_null) {
+            return eql(u8, self.long.?, other.long.?);
+        } else if (short_not_null) {
+            return (self.short.? == other.short.?);
+        }
+        return false;
+    }
+
+    /// Prints a string representation of the Arg
+    /// For debug View.
+    pub fn format(self: Arg, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+        try writer.print("Arg{{ short: {?c}, long: {?s}, info: \"{s}\" }}\n", .{
+            self.short, self.long, self.info,
+        });
+        switch (self.value) {
+            .str => |s| try writer.print("  value: .str  = {?s}\n", .{s}),
+            .bool => |b| try writer.print("  value: .bool = {?}\n", .{b}),
+            .num => |n| try writer.print("  value: .num  = {?d}\n", .{n}),
+            .list => |l| try writer.print("  value: .list = {?any}\n", .{l}),
+        }
+    }
+
+    //TODO: may be consider custom formatter for print the help message.
 };
 
 const DEFAULT_ARGS = [2]Arg{
@@ -239,6 +269,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
             version: VersionType,
             comptime commands: []const CmdT,
         ) !Self {
+            //TODO: Add a check for duplicate Options
             comptime {
                 if (commands.len <= 0) @compileError("You need to provided At list one command.");
                 for (commands) |cmd| {
@@ -384,6 +415,20 @@ pub fn CliInit(comptime CmdEnum: type) type {
             }
             if (pos_arg_list.items.len < self.running_cmd.min_pos_arg) return CliParseError.MinPosArg;
             self.pos_args = try pos_arg_list.toOwnedSlice(self.alloc);
+
+            if (cmd.options) |opts| for (opts) |opt| out: {
+                if (!opt.value.isNull()) {
+                    for (self.computed_args.data.items) |computed_arg| {
+                        if (opt.isEqual(computed_arg)) break :out;
+                    }
+                    var copy_opt = opt;
+                    if (copy_opt.value == .str and copy_opt.value.str != null) {
+                        copy_opt.value = .{ .str = try self.alloc.dupe(u8, copy_opt.value.str.?) };
+                        copy_opt.is_alloc = true;
+                    }
+                    try self.computed_args.append(copy_opt);
+                }
+            };
         }
 
         fn parseFlag(self: *Self, args: *RawArgs) !void {
@@ -489,6 +534,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
                 }
                 try slice.removeRange(args, 0, 1);
             }
+
             if (!found_arg) {
                 self.err_msg = try std.fmt.bufPrint(&self.err_msg_buf, "{s}", .{arg});
                 return CliParseError.UnknownOption;
@@ -806,6 +852,7 @@ test "parseKeyValueArgs invalid inputs" {
         try expectError(test_case.expected_error, result);
     }
 }
+
 test "parseKeyValueArgs additional edge cases" {
     const strEql = std.testing.expectEqualStrings;
     const deepEql = std.testing.expectEqualDeep;
