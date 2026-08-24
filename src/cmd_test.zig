@@ -51,6 +51,12 @@ const TestCommands = [_]cmd.Cmd(TestCmd){
                 .info = "Number of times to repeat",
                 .value = .{ .num = null },
             },
+            .{
+                .long = "print",
+                .short = 'p',
+                .info = "Print result",
+                .value = .{ .bool = false },
+            },
         },
         .min_arg = 0,
     },
@@ -78,6 +84,26 @@ fn createTestCli(allocator: Allocator) !CliInit(TestCmd) {
         .{ .str = "1.0.0" },
         &TestCommands,
     );
+}
+fn createArgs(alloc: Allocator, args: []const []const u8) !RawArgs {
+    var raw_args = try RawArgs.initCapacity(alloc, args.len);
+    try raw_args.appendSlice(alloc, args);
+    return raw_args;
+}
+
+test "uses default values when arguments are omitted" {
+    const alloc = std.testing.allocator;
+
+    var raw_args = try createArgs(alloc, &.{ "test-app", "add" });
+    defer raw_args.deinit(alloc);
+
+    var cli = try createTestCli(alloc);
+    defer cli.deinit();
+    try cli.parseAllArgs(&raw_args);
+
+    const print = try cli.getBoolArgOrNull("print");
+    try std.testing.expect(print != null);
+    try std.testing.expectEqual(false, print);
 }
 
 test "CliInit creates CLI with correct defaults" {

@@ -157,7 +157,7 @@ pub const ComputedArgs = struct {
         return null;
     }
 
-    pub fn getBoolArg(self: Self, arg_name: []const u8) !bool {
+    pub fn getBoolArgOrNull(self: Self, arg_name: []const u8) !?bool {
         for (self.data.items) |arg| {
             const query_char = if (arg_name.len > 0) arg_name[0] else ' ';
             if ((arg.long != null and std.mem.eql(u8, arg.long.?, arg_name)) or
@@ -173,8 +173,14 @@ pub const ComputedArgs = struct {
                 }
             }
         }
+        return null;
+    }
+
+    pub fn getBoolArg(self: Self, arg_name: []const u8) !bool {
+        if (try self.getBoolArgOrNull(arg_name)) |val| return val;
         return false;
     }
+
     pub fn append(self: *Self, arg: Arg) !void {
         try self.data.append(self.alloc, arg);
     }
@@ -578,6 +584,10 @@ pub fn CliInit(comptime CmdEnum: type) type {
 
         pub fn getNumArg(self: Self, arg_name: []const u8) !?i32 {
             return self.computed_args.getNumArg(arg_name);
+        }
+
+        pub fn getBoolArgOrNull(self: Self, arg_name: []const u8) !?bool {
+            return self.computed_args.getBoolArgOrNull(arg_name);
         }
 
         pub fn getBoolArg(self: Self, arg_name: []const u8) !bool {
