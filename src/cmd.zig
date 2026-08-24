@@ -65,7 +65,8 @@ pub const Arg = struct {
     value: ArgValue,
     //TODO : Do i need this,
     is_alloc: bool = false,
-
+    /// Allows empty string values
+    allow_empty_string_value: bool = false,
     fn getValueType(self: *const Arg) []const u8 {
         return switch (self.value) {
             .str => "<str >",
@@ -445,7 +446,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
                 //TODO: Maybe this for loop can be a hash map.
                 for (opts) |opt| {
                     if (opt.long != null and std.mem.eql(u8, opt.long.?, kv_arg.key[2..])) {
-                        if (kv_arg.value == null and opt.value != .bool and opt.value.isNull()) {
+                        if (kv_arg.value == null and !opt.allow_empty_string_value and opt.value != .bool and opt.value.isNull()) {
                             self.err_msg = try std.fmt.bufPrint(&self.err_msg_buf, "{s}", .{kv_arg.key});
                             return CliParseError.ValueRequired;
                         }
@@ -464,7 +465,8 @@ pub fn CliInit(comptime CmdEnum: type) type {
                             },
                             .str => {
                                 copy_opt.is_alloc = true;
-                                copy_opt.value = .{ .str = try self.alloc.dupe(u8, kv_arg.value.?) };
+                                const copy_value = if (opt.allow_empty_string_value and kv_arg.value == null) "" else kv_arg.value.?;
+                                copy_opt.value = .{ .str = try self.alloc.dupe(u8, copy_value) };
                                 try self.computed_args.append(copy_opt);
                             },
                             .num => {
@@ -503,7 +505,7 @@ pub fn CliInit(comptime CmdEnum: type) type {
 
                                     const kv_arg = try parseKVArg(args.items);
                                     // try kv_arg.print();
-                                    if (kv_arg.value == null and opt.value.isNull()) {
+                                    if (kv_arg.value == null and !opt.allow_empty_string_value and opt.value.isNull()) {
                                         self.err_msg = std.fmt.bufPrint(&self.err_msg_buf, "{s}", .{kv_arg.key}) catch unreachable;
                                         return CliParseError.ValueRequired;
                                     }
@@ -511,7 +513,8 @@ pub fn CliInit(comptime CmdEnum: type) type {
                                     switch (opt.value) {
                                         .str => {
                                             copy_opt.is_alloc = true;
-                                            copy_opt.value = .{ .str = try self.alloc.dupe(u8, kv_arg.value.?) };
+                                            const copy_value = if (opt.allow_empty_string_value and kv_arg.value == null) "" else kv_arg.value.?;
+                                            copy_opt.value = .{ .str = try self.alloc.dupe(u8, copy_value) };
                                             try self.computed_args.append(copy_opt);
                                         },
                                         .num => {
